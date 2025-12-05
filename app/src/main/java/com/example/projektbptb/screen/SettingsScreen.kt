@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.projektbptb.ui.component.BottomNavigationBar
 import com.example.projektbptb.ui.theme.BluePrimary
@@ -31,14 +32,19 @@ import com.example.projektbptb.viewmodel.SettingsViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    viewModel: SettingsViewModel = viewModel(),
+    viewModel: SettingsViewModel = viewModel(
+        factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(
+            LocalContext.current.applicationContext as android.app.Application
+        )
+    ),
     onNavigateToHome: () -> Unit = {},
     onNavigateToSell: () -> Unit = {},
     onNavigateToAddress: () -> Unit = {},
     onNavigateToLanguage: () -> Unit = {},
     onNavigateToChangePassword: () -> Unit = {},
     onNavigateToHelpCenter: () -> Unit = {},
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {},
+    onLogout: () -> Unit = {}
 ) {
 
     val user = viewModel.user.value
@@ -113,7 +119,15 @@ fun SettingsScreen(
             }
 
             SettingItem("Pusat Bantuan", onClick = onNavigateToHelpCenter)
-            SettingItem("Keluar", textColor = Color.Red)
+            SettingItem(
+                title = "Keluar",
+                textColor = Color.Red,
+                onClick = {
+                    viewModel.logout {
+                        onLogout()
+                    }
+                }
+            )
 
             Spacer(Modifier.height(60.dp)) // ✅ Aman dari bottom bar
         }
@@ -142,9 +156,9 @@ fun SettingItem(
     }
 }
 
-@SuppressLint("ViewModelConstructorInComposable")
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun SettingsScreenPreview() {
-    SettingsScreen(viewModel = SettingsViewModel()) // ✅ Preview benar tanpa warning
+    // Preview without ViewModel (requires Application context)
+    // SettingsScreen()
 }

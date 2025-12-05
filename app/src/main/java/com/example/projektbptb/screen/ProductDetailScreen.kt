@@ -28,9 +28,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import coil.compose.AsyncImage
 import com.example.projektbptb.R
-import com.example.projektbptb.model.Comment
-import com.example.projektbptb.model.ProductDetail
+import com.example.projektbptb.data.model.Comment
+import com.example.projektbptb.data.model.ProductDetail
 import com.example.projektbptb.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -104,14 +105,36 @@ fun ProductDetailScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             // Gambar Produk
-            Image(
-                painter = painterResource(id = product.imageRes),
-                contentDescription = product.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(300.dp)
-            )
+            if (!product.imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = product.imageUrl,
+                    contentDescription = product.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp),
+                    error = painterResource(id = R.drawable.logo),
+                    placeholder = painterResource(id = R.drawable.logo)
+                )
+            } else if (product.imageRes != 0) {
+                Image(
+                    painter = painterResource(id = product.imageRes),
+                    contentDescription = product.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp)
+                )
+            } else {
+                Image(
+                    painter = painterResource(id = R.drawable.logo),
+                    contentDescription = product.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp)
+                )
+            }
 
             Column(
                 modifier = Modifier

@@ -28,8 +28,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.example.projektbptb.R
 import com.example.projektbptb.ui.component.BottomNavigationBar
-import com.example.projektbptb.model.Product
+import com.example.projektbptb.data.model.Product
 import com.example.projektbptb.ui.theme.BlueLight
 import com.example.projektbptb.ui.theme.BluePrimary
 import com.example.projektbptb.ui.theme.GrayDark
@@ -176,15 +178,41 @@ fun ProductCard(
             horizontalAlignment = Alignment.Start
         ) {
             Box {
-                Image(
-                    painter = painterResource(id = product.imageRes),
-                    contentDescription = product.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .height(140.dp)
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                )
+                // Use AsyncImage for URL images, fallback to resource if imageUrl is null
+                if (!product.imageUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = product.imageUrl,
+                        contentDescription = product.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .height(140.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp)),
+                        error = painterResource(id = R.drawable.logo),
+                        placeholder = painterResource(id = R.drawable.logo)
+                    )
+                } else if (product.imageRes != 0) {
+                    Image(
+                        painter = painterResource(id = product.imageRes),
+                        contentDescription = product.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .height(140.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                    )
+                } else {
+                    // Fallback to logo if no image available
+                    Image(
+                        painter = painterResource(id = R.drawable.logo),
+                        contentDescription = product.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .height(140.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                    )
+                }
                 IconButton(
                     onClick = onFavoriteClick,
                     modifier = Modifier

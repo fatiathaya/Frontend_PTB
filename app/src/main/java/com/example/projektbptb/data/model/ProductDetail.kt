@@ -1,4 +1,4 @@
-package com.example.projektbptb.model
+package com.example.projektbptb.data.model
 
 import androidx.annotation.DrawableRes
 
@@ -11,7 +11,8 @@ data class ProductDetail(
     val description: String,
     val location: String,
     val whatsappNumber: String,
-    @DrawableRes val imageRes: Int,
+    @DrawableRes val imageRes: Int = 0, // For local fallback images
+    val imageUrl: String? = null, // For API images
     val isFavorite: Boolean = false,
     val sellerName: String = "Penjual",
     val comments: List<Comment> = emptyList()

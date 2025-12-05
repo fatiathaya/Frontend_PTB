@@ -1,49 +1,86 @@
 package com.example.projektbptb.viewmodel
 
+import android.app.Application
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.lifecycle.ViewModel
-import com.example.projektbptb.R
-import com.example.projektbptb.model.Product
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.projektbptb.data.network.AuthRepository
+import com.example.projektbptb.data.repository.ProductRepository
+import com.example.projektbptb.data.model.Product
+import kotlinx.coroutines.launch
 
-class HomeViewModel : ViewModel() {
-
+class HomeViewModel(application: Application) : AndroidViewModel(application) {
+    private val productRepository = ProductRepository()
+    private val authRepository = AuthRepository(application)
+    
     val categories = listOf("All", "Baju", "Perabotan", "Elektronik", "Kulia", "Sepatu")
     val selectedCategory = mutableStateOf("All")
-
-    val products = mutableStateListOf(
-        Product("Beruang", "Perabotan", "Rp 50.000", R.drawable.teddy, isFavorite = true),
-        Product("Baju Cewek", "Baju", "Rp 120.000", R.drawable.dress, isFavorite = true),
-        Product("Mainan", "Perabotan", "Rp 30.000", R.drawable.toy, isFavorite = true),
-        Product("Sepatu Adidas", "Sepatu", "Rp 150.000", R.drawable.shoes, isFavorite = true),
-        // Produk Baju tambahan
-        Product("Baju Cewe Size Kid", "Baju", "Rp 50.000", R.drawable.dress, isFavorite = false),
-        Product("Baju Kemeja", "Baju", "Rp 120.000", R.drawable.dress, isFavorite = false),
-        Product("Kemeja Slim Fit", "Baju", "Rp 120.000", R.drawable.dress, isFavorite = false),
-        Product("Kemeja Cowo", "Baju", "Rp 90.000", R.drawable.dress, isFavorite = false)
-    )
-
-    fun toggleFavorite(product: Product) {
-        val index = products.indexOf(product)
-        if (index != -1) {
-            val updated = product.copy(isFavorite = !product.isFavorite)
-            products[index] = updated
+    
+    val products = mutableStateListOf<Product>()
+    val isLoading = mutableStateOf(false)
+    val errorMessage = mutableStateOf<String?>(null)
+    
+    init {
+        loadProducts()
+    }
+    
+    fun loadProducts(category: String? = null, search: String? = null) {
+        isLoading.value = true
+        errorMessage.value = null
+        
+        viewModelScope.launch {
+            val token = authRepository.getToken()
+            val categoryFilter = if (category == "All" || category == null) null else category
+            
+            productRepository.getProducts(categoryFilter, search, token)
+                .onSuccess { productList ->
+                    products.clear()
+                    products.addAll(productList)
+                    isLoading.value = false
+                }
+                .onFailure { exception ->
+                    errorMessage.value = exception.message ?: "Gagal memuat produk"
+                    isLoading.value = false
+                }
         }
     }
-
+    
+    fun toggleFavorite(product: Product) {
+        val token = authRepository.getToken()
+        if (token == null) {
+            errorMessage.value = "Silakan login terlebih dahulu"
+            return
+        }
+        
+        viewModelScope.launch {
+            productRepository.toggleFavorite(product.id.toIntOrNull() ?: 0, token)
+                .onSuccess { updatedProduct ->
+                    val index = products.indexOfFirst { it.id == product.id }
+                    if (index != -1) {
+                        products[index] = updatedProduct
+                    }
+                }
+                .onFailure { exception ->
+                    errorMessage.value = exception.message ?: "Gagal mengubah favorite"
+                }
+        }
+    }
+    
     fun selectCategory(category: String) {
         selectedCategory.value = category
+        loadProducts(category)
     }
-
+    
     // Get favorite products
     val favoriteProducts: List<Product>
         get() = products.filter { it.isFavorite }
-
+    
     fun removeFavorite(product: Product) {
-        val index = products.indexOf(product)
-        if (index != -1) {
-            val updated = product.copy(isFavorite = false)
-            products[index] = updated
-        }
+        toggleFavorite(product)
+    }
+    
+    fun refresh() {
+        loadProducts(selectedCategory.value)
     }
 }

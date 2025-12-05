@@ -1,5 +1,8 @@
 package com.example.projektbptb.screen
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -9,24 +12,39 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModelProvider
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.projektbptb.R
 import com.example.projektbptb.ui.theme.*
+import com.example.projektbptb.viewmodel.AddProductViewModel
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddProductScreen(
+    viewModel: AddProductViewModel = viewModel(
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+            LocalContext.current.applicationContext as android.app.Application
+        )
+    ),
     onBackClick: () -> Unit = {},
-    onSubmitClick: () -> Unit = {}
+    onSubmitSuccess: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    
     var productName by remember { mutableStateOf("") }
     var condition by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
@@ -34,14 +52,45 @@ fun AddProductScreen(
     var location by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
     var whatsappNumber by remember { mutableStateOf("") }
-    var selectedPhoto by remember { mutableStateOf<String?>(null) }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedImageFile by remember { mutableStateOf<File?>(null) }
     
     var showConditionMenu by remember { mutableStateOf(false) }
     var showCategoryMenu by remember { mutableStateOf(false) }
     
+    val isLoading by viewModel.isLoading
+    val errorMessage by viewModel.errorMessage
+    val isProductCreated by viewModel.isProductCreated
+    
     val conditions = listOf("Baru", "Bekas", "Sangat Baik", "Baik", "Cukup")
     val categories = listOf("Baju", "Perabotan", "Elektronik", "Kulia", "Sepatu")
-
+    
+    // Image picker launcher
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            selectedImageUri = it
+            // Convert URI to File
+            val inputStream = context.contentResolver.openInputStream(it)
+            val file = File(context.cacheDir, "product_image_${System.currentTimeMillis()}.jpg")
+            inputStream?.use { input ->
+                file.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            selectedImageFile = file
+        }
+    }
+    
+    // Handle product creation success
+    LaunchedEffect(isProductCreated) {
+        if (isProductCreated) {
+            viewModel.resetState()
+            onSubmitSuccess()
+        }
+    }
+    
     Scaffold(
         topBar = {
             TopAppBar(
@@ -78,6 +127,22 @@ fun AddProductScreen(
                 .padding(vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+            // Error message
+            errorMessage?.let { error ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFFFEBEE)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = error,
+                        color = androidx.compose.ui.graphics.Color(0xFFC62828),
+                        modifier = Modifier.padding(16.dp),
+                        fontSize = 14.sp
+                    )
+                }
+            }
+            
             // Foto Produk
             Column {
                 Text(
@@ -92,35 +157,30 @@ fun AddProductScreen(
                         .fillMaxWidth()
                         .height(200.dp)
                         .border(1.dp, Black, RoundedCornerShape(8.dp))
-                        .background(White, RoundedCornerShape(8.dp))
-                        .padding(16.dp),
+                        .background(White, RoundedCornerShape(8.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (selectedPhoto != null) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.logo),
-                                contentDescription = "Document",
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                selectedPhoto ?: "",
-                                fontSize = 12.sp,
-                                color = Black
-                            )
-                        }
+                    if (selectedImageUri != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(selectedImageUri)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "Selected Product Image",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
                     } else {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxSize()
                         ) {
                             Image(
                                 painter = painterResource(id = R.drawable.logo),
-                                contentDescription = "Document",
+                                contentDescription = "No Image",
                                 modifier = Modifier.size(48.dp)
                             )
                         }
@@ -128,7 +188,7 @@ fun AddProductScreen(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
-                    onClick = { selectedPhoto = "Sepatu Adidas.JPG" },
+                    onClick = { imagePickerLauncher.launch("image/*") },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = GreenPrimary
                     ),
@@ -364,7 +424,19 @@ fun AddProductScreen(
 
             // Tombol Tambah Produk
             Button(
-                onClick = onSubmitClick,
+                onClick = {
+                    viewModel.createProduct(
+                        name = productName,
+                        category = category,
+                        condition = condition,
+                        description = description,
+                        location = location,
+                        price = price,
+                        whatsappNumber = whatsappNumber,
+                        imageFile = selectedImageFile
+                    )
+                },
+                enabled = !isLoading,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = BluePrimary
                 ),
@@ -373,16 +445,22 @@ fun AddProductScreen(
                     .fillMaxWidth()
                     .height(50.dp)
             ) {
-                Text(
-                    "Tambah Produk",
-                    color = White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = White
+                    )
+                } else {
+                    Text(
+                        "Tambah Produk",
+                        color = White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }
-

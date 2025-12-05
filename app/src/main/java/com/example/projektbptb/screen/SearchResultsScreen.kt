@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.projektbptb.model.Product
+import com.example.projektbptb.data.model.Product
 import com.example.projektbptb.ui.component.BottomNavigationBar
 import com.example.projektbptb.ui.theme.*
 

@@ -18,8 +18,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.projektbptb.R
-import com.example.projektbptb.model.Product
+import com.example.projektbptb.data.model.Product
 import com.example.projektbptb.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -104,11 +105,19 @@ fun EditProductScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            Image(
-                                painter = painterResource(id = product.imageRes),
-                                contentDescription = "Document",
-                                modifier = Modifier.size(48.dp)
-                            )
+                            if (product.imageRes != 0) {
+                                Image(
+                                    painter = painterResource(id = product.imageRes),
+                                    contentDescription = "Document",
+                                    modifier = Modifier.size(48.dp)
+                                )
+                            } else {
+                                Image(
+                                    painter = painterResource(id = R.drawable.logo),
+                                    contentDescription = "Document",
+                                    modifier = Modifier.size(48.dp)
+                                )
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 selectedPhoto ?: "",

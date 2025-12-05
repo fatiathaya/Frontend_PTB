@@ -12,7 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import com.example.projektbptb.model.Product
+import com.example.projektbptb.data.model.Product
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.projektbptb.R
 import com.example.projektbptb.ui.component.BottomNavigationBar
 import com.example.projektbptb.ui.theme.*
@@ -40,11 +41,16 @@ fun ProfileScreen(
     onNavigateToLanguage: () -> Unit = {},
     onNavigateToChangePassword: () -> Unit = {},
     onNavigateToHelpCenter: () -> Unit = {},
-    onNavigateToEditProduct: (com.example.projektbptb.model.Product) -> Unit = {},
+    onNavigateToEditProduct: (com.example.projektbptb.data.model.Product) -> Unit = {},
     onNavigateToSettings: () -> Unit = {}
 ) {
     val user by viewModel.user
     val notifEnabled by viewModel.isNotificationEnabled
+    
+    // Refresh user data when screen is displayed
+    LaunchedEffect(Unit) {
+        viewModel.loadUser()
+    }
 
     Scaffold(
         topBar = {
@@ -103,62 +109,67 @@ fun ProfileScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box {
-                    if (user.profileImageRes != 0) {
-                        Image(
-                            painter = painterResource(id = user.profileImageRes),
-                            contentDescription = null,
+                user?.let { currentUser ->
+                    Box {
+                        if (currentUser.profileImageRes != 0) {
+                            Image(
+                                painter = painterResource(id = currentUser.profileImageRes),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(100.dp)
+                                    .clip(CircleShape)
+                                    .border(2.dp, GreenPrimary, CircleShape)
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(100.dp)
+                                    .clip(CircleShape)
+                                    .background(BlueLight)
+                                    .border(2.dp, GreenPrimary, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = currentUser.name.firstOrNull()?.toString() ?: "U",
+                                    fontSize = 40.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BluePrimary
+                                )
+                            }
+                        }
+                        // Edit Icon di pojok kanan bawah
+                        IconButton(
+                            onClick = { onNavigateToAddProfile() },
                             modifier = Modifier
-                                .size(100.dp)
-                                .clip(CircleShape)
-                                .border(2.dp, GreenPrimary, CircleShape)
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(100.dp)
-                                .clip(CircleShape)
-                                .background(BlueLight)
-                                .border(2.dp, GreenPrimary, CircleShape),
-                            contentAlignment = Alignment.Center
+                                .align(Alignment.BottomEnd)
+                                .size(32.dp)
+                                .background(BluePrimary, CircleShape)
+                                .border(2.dp, White, CircleShape)
                         ) {
-                            Text(
-                                text = user.name.firstOrNull()?.toString() ?: "U",
-                                fontSize = 40.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BluePrimary
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = "Edit Photo",
+                                tint = White,
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
-                    // Edit Icon di pojok kanan bawah
-                    IconButton(
-                        onClick = { onNavigateToAddProfile() },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .size(32.dp)
-                            .background(BluePrimary, CircleShape)
-                            .border(2.dp, White, CircleShape)
-                    ) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = "Edit Photo",
-                            tint = White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = currentUser.name,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Black
+                    )
+                    Text(
+                        text = currentUser.gender ?: "",
+                        fontSize = 14.sp,
+                        color = GrayDark
+                    )
+                } ?: run {
+                    // Show loading or placeholder when user is null
+                    CircularProgressIndicator()
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = user.name,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Black
-                )
-                Text(
-                    text = user.gender,
-                    fontSize = 14.sp,
-                    color = GrayDark
-                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -230,7 +241,7 @@ fun ProfileScreen(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        user.email,
+                        user?.email ?: "",
                         fontSize = 14.sp,
                         color = Black
                     )
@@ -251,7 +262,7 @@ fun ProfileScreen(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        user.phoneNumber,
+                        user?.phoneNumber ?: "",
                         fontSize = 14.sp,
                         color = Black
                     )
@@ -340,13 +351,34 @@ fun ProductItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Image(
-                painter = painterResource(id = product.imageRes),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(RoundedCornerShape(8.dp))
-            )
+            // Use AsyncImage for URL images, fallback to resource
+            if (!product.imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = product.imageUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(RoundedCornerShape(8.dp)),
+                    error = painterResource(id = com.example.projektbptb.R.drawable.logo),
+                    placeholder = painterResource(id = com.example.projektbptb.R.drawable.logo)
+                )
+            } else if (product.imageRes != 0) {
+                Image(
+                    painter = painterResource(id = product.imageRes),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                )
+            } else {
+                Image(
+                    painter = painterResource(id = com.example.projektbptb.R.drawable.logo),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                )
+            }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

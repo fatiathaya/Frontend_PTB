@@ -2,7 +2,9 @@ package com.example.projektbptb.screen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -13,27 +15,48 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import com.example.projektbptb.ui.theme.BlueLight
 import com.example.projektbptb.ui.theme.BluePrimary
 
 @Composable
 fun RegisterScreen(
     onRegisterClick: () -> Unit = {},
-    onLoginClick: () -> Unit = {}
+    onLoginClick: () -> Unit = {},
+    viewModel: com.example.projektbptb.viewmodel.LoginViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
+    var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var phoneNumber by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
+    var selectedGender by remember { mutableStateOf("Laki-laki") }
+    
+    val isLoading by viewModel.isLoading
+    val errorMessage by viewModel.errorMessage
+    val isLoginSuccess by viewModel.isLoginSuccess
+    
+    LaunchedEffect(isLoginSuccess) {
+        if (isLoginSuccess) {
+            onRegisterClick()
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BlueLight),
-        contentAlignment = Alignment.Center
+            .background(BlueLight)
+            .padding(vertical = 16.dp),
+        contentAlignment = Alignment.TopCenter
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.9f)
+                .verticalScroll(rememberScrollState())
                 .background(Color.White, shape = RoundedCornerShape(20.dp))
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -53,6 +76,23 @@ fun RegisterScreen(
                 color = Color.Black.copy(alpha = 0.8f)
             )
             Spacer(modifier = Modifier.height(32.dp))
+            
+            // Name
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Nama") },
+                modifier = Modifier.fillMaxWidth(),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFFF3F6FC),
+                    unfocusedContainerColor = Color(0xFFF3F6FC),
+                    focusedIndicatorColor = BluePrimary,
+                    unfocusedIndicatorColor = Color(0xFFB0C4DE)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Email
             OutlinedTextField(
@@ -68,6 +108,89 @@ fun RegisterScreen(
                 ),
                 shape = RoundedCornerShape(12.dp)
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Username
+            OutlinedTextField(
+                value = username,
+                onValueChange = { username = it },
+                label = { Text("Username") },
+                modifier = Modifier.fillMaxWidth(),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFFF3F6FC),
+                    unfocusedContainerColor = Color(0xFFF3F6FC),
+                    focusedIndicatorColor = BluePrimary,
+                    unfocusedIndicatorColor = Color(0xFFB0C4DE)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Phone Number
+            OutlinedTextField(
+                value = phoneNumber,
+                onValueChange = { phoneNumber = it },
+                label = { Text("No HP") },
+                modifier = Modifier.fillMaxWidth(),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFFF3F6FC),
+                    unfocusedContainerColor = Color(0xFFF3F6FC),
+                    focusedIndicatorColor = BluePrimary,
+                    unfocusedIndicatorColor = Color(0xFFB0C4DE)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Gender
+            Column {
+                Text(
+                    text = "Jenis Kelamin",
+                    fontSize = 14.sp,
+                    color = Color.Black,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { selectedGender = "Laki-laki" },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selectedGender == "Laki-laki",
+                            onClick = { selectedGender = "Laki-laki" },
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = BluePrimary
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Laki-laki", fontSize = 14.sp)
+                    }
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { selectedGender = "Perempuan" },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selectedGender == "Perempuan",
+                            onClick = { selectedGender = "Perempuan" },
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = BluePrimary
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Perempuan", fontSize = 14.sp)
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -104,10 +227,34 @@ fun RegisterScreen(
             )
 
             Spacer(modifier = Modifier.height(24.dp))
+            
+            // Error message
+            errorMessage?.let { error ->
+                Text(
+                    text = error,
+                    color = Color.Red,
+                    fontSize = 12.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
             // Tombol Sign Up
             Button(
-                onClick = onRegisterClick,
+                onClick = {
+                    viewModel.register(
+                        name = name,
+                        email = email,
+                        password = password,
+                        confirmPassword = confirmPassword,
+                        username = username.ifBlank { null },
+                        phoneNumber = phoneNumber.ifBlank { null },
+                        gender = selectedGender
+                    ) {
+                        // onSuccess handled by LaunchedEffect
+                    }
+                },
+                enabled = !isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
@@ -117,7 +264,14 @@ fun RegisterScreen(
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Sign up", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White
+                    )
+                } else {
+                    Text("Sign up", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))

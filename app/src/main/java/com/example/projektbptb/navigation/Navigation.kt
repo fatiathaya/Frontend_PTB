@@ -1,6 +1,8 @@
 package com.example.projektbptb.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -65,7 +67,13 @@ fun NavigationGraph(navController: NavHostController) {
         }
         
         composable(Screen.Login.route) {
+            val loginViewModel: com.example.projektbptb.viewmodel.LoginViewModel = viewModel(
+                factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+                    LocalContext.current.applicationContext as android.app.Application
+                )
+            )
             LoginScreen(
+                viewModel = loginViewModel,
                 onLoginClick = {
                     // Setelah login berhasil, navigasi ke Home
                     navController.navigate(Screen.Home.route) {
@@ -85,7 +93,13 @@ fun NavigationGraph(navController: NavHostController) {
         }
         
         composable(Screen.Register.route) {
+            val loginViewModel: com.example.projektbptb.viewmodel.LoginViewModel = viewModel(
+                factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+                    LocalContext.current.applicationContext as android.app.Application
+                )
+            )
             RegisterScreen(
+                viewModel = loginViewModel,
                 onRegisterClick = {
                     // Setelah register berhasil, navigasi ke Home
                     navController.navigate(Screen.Home.route) {
@@ -103,7 +117,11 @@ fun NavigationGraph(navController: NavHostController) {
         }
         
         composable(Screen.Home.route) {
-            val homeViewModel: com.example.projektbptb.viewmodel.HomeViewModel = viewModel()
+            val homeViewModel: com.example.projektbptb.viewmodel.HomeViewModel = viewModel(
+                factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+                    LocalContext.current.applicationContext as android.app.Application
+                )
+            )
             HomeScreen(
                 viewModel = homeViewModel,
                 onNavigateToSettings = {
@@ -174,12 +192,24 @@ fun NavigationGraph(navController: NavHostController) {
                 },
                 onBackClick = {
                     navController.popBackStack()
+                },
+                onLogout = {
+                    // Navigate to Landing screen and clear back stack
+                    navController.navigate(Screen.Landing.route) {
+                        popUpTo(0) { inclusive = true } // Clear entire back stack
+                        launchSingleTop = true
+                    }
                 }
             )
         }
         
         composable(Screen.Profile.route) {
-            val profileViewModel: ProfileViewModel = viewModel(key = "profile")
+            val profileViewModel: ProfileViewModel = viewModel(
+                key = "profile",
+                factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+                    LocalContext.current.applicationContext as android.app.Application
+                )
+            )
             ProfileScreen(
                 viewModel = profileViewModel,
                 onNavigateToHome = {
@@ -232,7 +262,12 @@ fun NavigationGraph(navController: NavHostController) {
         }
         
         composable(Screen.AddProfile.route) {
-            val profileViewModel: ProfileViewModel = viewModel(key = "profile")
+            val profileViewModel: ProfileViewModel = viewModel(
+                key = "profile",
+                factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+                    LocalContext.current.applicationContext as android.app.Application
+                )
+            )
             AddProfileScreen(
                 viewModel = profileViewModel,
                 onBackClick = {
@@ -321,10 +356,20 @@ fun NavigationGraph(navController: NavHostController) {
             route = "${Screen.EditProduct.route}/{productName}",
             arguments = listOf(navArgument("productName") { type = NavType.StringType })
         ) { backStackEntry ->
-            val profileViewModel: ProfileViewModel = viewModel(key = "profile")
+            val profileViewModel: ProfileViewModel = viewModel(
+                key = "profile",
+                factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+                    LocalContext.current.applicationContext as android.app.Application
+                )
+            )
             val productName = backStackEntry.arguments?.getString("productName") ?: ""
             val product = profileViewModel.myProducts.find { it.name == productName }
-                ?: com.example.projektbptb.model.Product("", "", "", com.example.projektbptb.R.drawable.logo)
+                ?: com.example.projektbptb.data.model.Product(
+                    name = "",
+                    category = "",
+                    price = "Rp 0",
+                    imageRes = com.example.projektbptb.R.drawable.logo
+                )
             
             EditProductScreen(
                 product = product,
@@ -343,12 +388,17 @@ fun NavigationGraph(navController: NavHostController) {
         }
 
         composable(Screen.AddProduct.route) {
+            val addProductViewModel: com.example.projektbptb.viewmodel.AddProductViewModel = viewModel(
+                factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+                    LocalContext.current.applicationContext as android.app.Application
+                )
+            )
             AddProductScreen(
+                viewModel = addProductViewModel,
                 onBackClick = {
                     navController.popBackStack()
                 },
-                onSubmitClick = {
-                    // TODO: Handle submit product
+                onSubmitSuccess = {
                     navController.popBackStack()
                 }
             )
@@ -369,7 +419,11 @@ fun NavigationGraph(navController: NavHostController) {
         }
 
         composable(Screen.Wishlist.route) {
-            val homeViewModel: com.example.projektbptb.viewmodel.HomeViewModel = viewModel()
+            val homeViewModel: com.example.projektbptb.viewmodel.HomeViewModel = viewModel(
+                factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+                    LocalContext.current.applicationContext as android.app.Application
+                )
+            )
             WishlistScreen(
                 viewModel = homeViewModel,
                 onBackClick = {
@@ -384,7 +438,11 @@ fun NavigationGraph(navController: NavHostController) {
         }
 
         composable(Screen.Search.route) {
-            val homeViewModel: com.example.projektbptb.viewmodel.HomeViewModel = viewModel()
+            val homeViewModel: com.example.projektbptb.viewmodel.HomeViewModel = viewModel(
+                factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+                    LocalContext.current.applicationContext as android.app.Application
+                )
+            )
             SearchScreen(
                 onBackClick = {
                     navController.popBackStack()
@@ -406,7 +464,11 @@ fun NavigationGraph(navController: NavHostController) {
             route = "${Screen.SearchResults.route}/{query}",
             arguments = listOf(navArgument("query") { type = NavType.StringType })
         ) { backStackEntry ->
-            val homeViewModel: com.example.projektbptb.viewmodel.HomeViewModel = viewModel()
+            val homeViewModel: com.example.projektbptb.viewmodel.HomeViewModel = viewModel(
+                factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+                    LocalContext.current.applicationContext as android.app.Application
+                )
+            )
             val query = backStackEntry.arguments?.getString("query") ?: ""
             SearchResultsScreen(
                 searchQuery = query,

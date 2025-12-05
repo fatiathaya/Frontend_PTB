@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.delay
 import com.example.projektbptb.R
 import com.example.projektbptb.ui.theme.*
 import com.example.projektbptb.viewmodel.ProfileViewModel
@@ -35,17 +36,31 @@ fun AddProfileScreen(
     onSaveClick: (String, String, String, String) -> Unit = { _, _, _, _ -> }
 ) {
     val currentUser by viewModel.user
-    var username by remember(currentUser.username) { mutableStateOf(if (currentUser.username == "XXXXXXXXXXX" || currentUser.username.isEmpty()) "M.Abdul" else currentUser.username) }
-    var phoneNumber by remember(currentUser.phoneNumber) { mutableStateOf(if (currentUser.phoneNumber.isEmpty()) "0857XXXXXXXXX" else currentUser.phoneNumber) }
-    var email by remember(currentUser.email) { mutableStateOf(if (currentUser.email.isEmpty()) "abduldullll@gmail.com" else currentUser.email) }
-    var selectedGender by remember(currentUser.gender) { mutableStateOf(if (currentUser.gender.isEmpty()) "Laki-laki" else currentUser.gender) }
+    val isLoading by viewModel.isLoading
+    val errorMessage by viewModel.errorMessage
+    
+    // Clear error message when screen is displayed (to avoid showing product errors)
+    LaunchedEffect(Unit) {
+        // Only clear if it's a product-related error
+        if (errorMessage?.contains("produk", ignoreCase = true) == true ||
+            errorMessage?.contains("product", ignoreCase = true) == true) {
+            viewModel.errorMessage.value = null
+        }
+    }
+    
+    var name by remember(currentUser?.name) { mutableStateOf(currentUser?.name ?: "") }
+    var username by remember(currentUser?.username) { mutableStateOf(currentUser?.username ?: "") }
+    var phoneNumber by remember(currentUser?.phoneNumber) { mutableStateOf(currentUser?.phoneNumber ?: "") }
+    var email by remember(currentUser?.email) { mutableStateOf(currentUser?.email ?: "") }
+    var selectedGender by remember(currentUser?.gender) { mutableStateOf(currentUser?.gender ?: "Laki-laki") }
+    var updateTriggered by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        "Tambah Profile",
+                        "Edit Profile",
                         color = BluePrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp
@@ -127,18 +142,41 @@ fun AddProfileScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                // Nama Pengguna
+                // Nama
                 Column {
                     Text(
-                        "Nama Pengguna",
+                        "Nama",
                         color = Black,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                     OutlinedTextField(
-                        value = username,
-                        onValueChange = { username = it },
+                        value = name,
+                        onValueChange = { newValue -> name = newValue },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = TextFieldDefaults.colors(
+                            focusedIndicatorColor = BluePrimary,
+                            unfocusedIndicatorColor = BluePrimary,
+                            focusedContainerColor = White,
+                            unfocusedContainerColor = White
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+                
+                // Username
+                Column {
+                    Text(
+                        "Username",
+                        color = Black,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = username ?: "",
+                        onValueChange = { newValue -> username = newValue },
                         modifier = Modifier.fillMaxWidth(),
                         colors = TextFieldDefaults.colors(
                             focusedIndicatorColor = BluePrimary,
@@ -161,7 +199,7 @@ fun AddProfileScreen(
                     )
                     OutlinedTextField(
                         value = phoneNumber,
-                        onValueChange = { phoneNumber = it },
+                        onValueChange = { newValue -> phoneNumber = newValue },
                         modifier = Modifier.fillMaxWidth(),
                         colors = TextFieldDefaults.colors(
                             focusedIndicatorColor = BluePrimary,
@@ -184,7 +222,7 @@ fun AddProfileScreen(
                     )
                     OutlinedTextField(
                         value = email,
-                        onValueChange = { email = it },
+                        onValueChange = { newValue -> email = newValue },
                         modifier = Modifier.fillMaxWidth(),
                         colors = TextFieldDefaults.colors(
                             focusedIndicatorColor = BluePrimary,
@@ -246,19 +284,34 @@ fun AddProfileScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+            
+            // Error message
+            errorMessage?.let { error ->
+                Text(
+                    text = error,
+                    color = Color.Red,
+                    fontSize = 12.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
             // Tombol Simpan
             Button(
                 onClick = {
+                    if (name.isBlank()) {
+                        return@Button
+                    }
+                    updateTriggered = true
                     viewModel.updateProfile(
-                        name = username,
-                        username = username,
+                        name = name,
+                        username = username ?: "",
                         email = email,
-                        phoneNumber = phoneNumber,
-                        gender = selectedGender
+                        phoneNumber = phoneNumber ?: "",
+                        gender = selectedGender ?: "Laki-laki"
                     )
-                    onSaveClick(username, phoneNumber, email, selectedGender)
                 },
+                enabled = !isLoading && name.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = BluePrimary
                 ),
@@ -267,12 +320,32 @@ fun AddProfileScreen(
                     .fillMaxWidth()
                     .height(50.dp)
             ) {
-                Text(
-                    "Simpan",
-                    color = White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = White
+                    )
+                } else {
+                    Text(
+                        "Simpan",
+                        color = White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+            }
+            
+            // Auto navigate back after successful update
+            LaunchedEffect(isLoading, errorMessage, updateTriggered) {
+                if (updateTriggered && !isLoading && errorMessage == null) {
+                    // Update successful, navigate back
+                    kotlinx.coroutines.delay(500)
+                    onBackClick()
+                    updateTriggered = false
+                } else if (updateTriggered && !isLoading && errorMessage != null) {
+                    // Update failed, don't navigate
+                    updateTriggered = false
+                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))

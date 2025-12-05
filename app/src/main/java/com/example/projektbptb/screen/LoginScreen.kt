@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -18,6 +19,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.projektbptb.R
 import com.example.projektbptb.ui.theme.BluePrimary
 
@@ -25,10 +29,32 @@ import com.example.projektbptb.ui.theme.BluePrimary
 fun LoginScreen(
     onLoginClick: () -> Unit = {},
     onRegisterClick: () -> Unit = {},
-    onForgotPasswordClick: () -> Unit = {}
+    onForgotPasswordClick: () -> Unit = {},
+    viewModel: com.example.projektbptb.viewmodel.LoginViewModel = viewModel(
+        factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(
+            LocalContext.current.applicationContext as android.app.Application
+        )
+    )
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    
+    val isLoading by viewModel.isLoading
+    val errorMessage by viewModel.errorMessage
+    val isLoginSuccess by viewModel.isLoginSuccess
+    
+    LaunchedEffect(isLoginSuccess) {
+        if (isLoginSuccess) {
+            try {
+                onLoginClick()
+            } catch (e: Exception) {
+                // Handle navigation error gracefully
+                errorMessage?.let { error ->
+                    // Error already set in ViewModel
+                }
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -125,9 +151,25 @@ fun LoginScreen(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
+            
+            // Error message
+            errorMessage?.let { error ->
+                Text(
+                    text = error,
+                    color = Color.Red,
+                    fontSize = 12.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
             Button(
-                onClick = onLoginClick,
+                onClick = {
+                    viewModel.login(email, password) {
+                        // onSuccess handled by LaunchedEffect
+                    }
+                },
+                enabled = !isLoading,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = BluePrimary,
                     contentColor = Color.White
@@ -137,7 +179,14 @@ fun LoginScreen(
                     .height(48.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Sign in", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White
+                    )
+                } else {
+                    Text("Sign in", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

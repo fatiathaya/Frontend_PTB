@@ -51,6 +51,14 @@ fun HomeScreen(
 
     val selectedCategory by viewModel.selectedCategory
     val products = viewModel.products
+    
+    // Pastikan status favorite ter-sync saat kembali ke HomeScreen
+    // Gunakan DisposableEffect untuk memastikan sync setiap kali screen menjadi visible
+    DisposableEffect(Unit) {
+        // Sync status favorite saat screen menjadi visible
+        viewModel.loadFavorites()
+        onDispose { }
+    }
 
     Scaffold(
         bottomBar = { 
@@ -145,7 +153,10 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(products) { product ->
+                items(
+                    items = products,
+                    key = { it.id }
+                ) { product ->
                     ProductCard(
                         product = product,
                         onFavoriteClick = { viewModel.toggleFavorite(product) },
@@ -165,6 +176,10 @@ fun ProductCard(
     onFavoriteClick: () -> Unit,
     onProductClick: () -> Unit = {}
 ) {
+    // Pastikan selalu membaca nilai terbaru dari product.isFavorite
+    // Gunakan key untuk memastikan re-composition ketika product berubah
+    val isFavorite = remember(product.id, product.isFavorite) { product.isFavorite }
+    
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -213,6 +228,7 @@ fun ProductCard(
                             .clip(RoundedCornerShape(8.dp))
                     )
                 }
+                // Icon dan warna harus selalu sinkron dengan isFavorite
                 IconButton(
                     onClick = onFavoriteClick,
                     modifier = Modifier
@@ -222,9 +238,9 @@ fun ProductCard(
                         .size(32.dp)
                 ) {
                     Icon(
-                        imageVector = if (product.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = null,
-                        tint = if (product.isFavorite) Color.Red else Color.Gray,
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Hapus dari wishlist" else "Tambah ke wishlist",
+                        tint = if (isFavorite) Color.Red else Color.Gray,
                         modifier = Modifier.size(18.dp)
                     )
                 }

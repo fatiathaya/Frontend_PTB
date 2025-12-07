@@ -53,7 +53,15 @@ fun ProductDetailScreen(
 ) {
     var commentText by remember { mutableStateOf("") }
     var comments by remember { mutableStateOf(product.comments) }
-    var isFavorite by remember { mutableStateOf(product.isFavorite) }
+    // State isFavorite harus ter-sync dengan product.isFavorite
+    // Jangan update lokal sebelum API call selesai
+    var isFavorite by remember(product.id) { mutableStateOf(product.isFavorite) }
+    
+    // Update isFavorite ketika product berubah
+    LaunchedEffect(product.id, product.isFavorite) {
+        isFavorite = product.isFavorite
+    }
+    
     var showCommentInput by remember { mutableStateOf(false) }
     var commentTextFieldFocusRequester = remember { FocusRequester() }
     var editingCommentId by remember { mutableStateOf<String?>(null) }
@@ -81,7 +89,8 @@ fun ProductDetailScreen(
                 },
                 actions = {
                     IconButton(onClick = {
-                        isFavorite = !isFavorite
+                        // Jangan update state lokal dulu, biarkan API yang menentukan
+                        // State akan ter-update setelah API call selesai melalui LaunchedEffect
                         onFavoriteClick()
                     }) {
                         Icon(

@@ -117,7 +117,9 @@ fun NavigationGraph(navController: NavHostController) {
         }
         
         composable(Screen.Home.route) {
+            // Use key to ensure same instance is used across screens
             val homeViewModel: com.example.projektbptb.viewmodel.HomeViewModel = viewModel(
+                key = "HomeViewModel",
                 factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
                     LocalContext.current.applicationContext as android.app.Application
                 )
@@ -419,7 +421,9 @@ fun NavigationGraph(navController: NavHostController) {
         }
 
         composable(Screen.Wishlist.route) {
+            // Use the same ViewModel instance as HomeScreen by using the same key
             val homeViewModel: com.example.projektbptb.viewmodel.HomeViewModel = viewModel(
+                key = "HomeViewModel",
                 factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
                     LocalContext.current.applicationContext as android.app.Application
                 )

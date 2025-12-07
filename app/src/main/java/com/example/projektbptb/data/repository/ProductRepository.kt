@@ -169,11 +169,18 @@ class ProductRepository {
         return withContext(Dispatchers.IO) {
             try {
                 val response = productApiService.getFavorites("Bearer $token")
-                if (response.isSuccessful && response.body()?.success == true) {
-                    val products = response.body()!!.data!!.map { it.toProduct() }
-                    Result.success(products)
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    if (body?.success == true && body.data != null) {
+                        val products = body.data.map { it.toProduct() }
+                        Result.success(products)
+                    } else {
+                        // If no favorites, return empty list
+                        Result.success(emptyList())
+                    }
                 } else {
-                    Result.failure(Exception(response.body()?.message ?: "Failed to get favorites"))
+                    val errorMessage = response.body()?.message ?: response.message() ?: "Failed to get favorites"
+                    Result.failure(Exception(errorMessage))
                 }
             } catch (e: Exception) {
                 Result.failure(e)

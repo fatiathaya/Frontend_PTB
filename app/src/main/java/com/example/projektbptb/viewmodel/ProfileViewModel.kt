@@ -19,8 +19,17 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     val isNotificationEnabled = mutableStateOf(true)
     val myProducts = mutableStateListOf<Product>()
     val isLoading = mutableStateOf(false)
+    val isUpdating = mutableStateOf(false)
     val errorMessage = mutableStateOf<String?>(null)
     val productErrorMessage = mutableStateOf<String?>(null) // Separate error for products
+    val successMessage = mutableStateOf<String?>(null)
+    
+    // Function to clear all messages
+    fun clearMessages() {
+        successMessage.value = null
+        errorMessage.value = null
+        isUpdating.value = false
+    }
     
     init {
         loadUser()
@@ -120,19 +129,35 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     fun deleteProduct(product: Product) {
         val token = authRepository.getToken() ?: return
         
+        isUpdating.value = true
+        successMessage.value = null
+        errorMessage.value = null
+        
         viewModelScope.launch {
             productRepository.deleteProduct(product.id.toIntOrNull() ?: 0, token)
                 .onSuccess {
+                    // Remove from local list immediately
                     myProducts.remove(product)
+                    
+                    // Reload all products to ensure fresh data from server
+                    loadMyProducts()
+                    
+                    successMessage.value = "Produk berhasil dihapus"
+                    isUpdating.value = false
                 }
                 .onFailure { exception ->
                     errorMessage.value = exception.message ?: "Gagal menghapus produk"
+                    isUpdating.value = false
                 }
         }
     }
     
-    fun updateProduct(oldProduct: Product, newProduct: Product) {
+    fun updateProduct(oldProduct: Product, newProduct: Product, imageFile: java.io.File? = null) {
         val token = authRepository.getToken() ?: return
+        
+        isUpdating.value = true
+        successMessage.value = null
+        errorMessage.value = null
         
         viewModelScope.launch {
             productRepository.updateProduct(
@@ -142,19 +167,26 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 price = newProduct.price,
                 description = newProduct.description,
                 condition = newProduct.condition,
-                location = newProduct.location,
                 whatsappNumber = newProduct.whatsappNumber,
-                imageUrl = newProduct.imageUrl,
+                imageFile = imageFile,
                 token = token
             )
                 .onSuccess { updatedProduct ->
+                    // Update local list immediately
                     val index = myProducts.indexOf(oldProduct)
                     if (index != -1) {
                         myProducts[index] = updatedProduct
                     }
+                    
+                    // Reload all products to ensure fresh data from server
+                    loadMyProducts()
+                    
+                    successMessage.value = "Produk berhasil diperbarui"
+                    isUpdating.value = false
                 }
                 .onFailure { exception ->
                     errorMessage.value = exception.message ?: "Gagal memperbarui produk"
+                    isUpdating.value = false
                 }
         }
     }

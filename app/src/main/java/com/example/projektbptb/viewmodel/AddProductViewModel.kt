@@ -23,7 +23,6 @@ class AddProductViewModel(application: Application) : AndroidViewModel(applicati
         category: String,
         condition: String,
         description: String,
-        location: String,
         price: String,
         whatsappNumber: String,
         imageFile: File?
@@ -46,10 +45,6 @@ class AddProductViewModel(application: Application) : AndroidViewModel(applicati
             errorMessage.value = "Kondisi harus dipilih"
             return
         }
-        if (location.isBlank()) {
-            errorMessage.value = "Lokasi tidak boleh kosong"
-            return
-        }
         if (price.isBlank()) {
             errorMessage.value = "Harga tidak boleh kosong"
             return
@@ -69,7 +64,6 @@ class AddProductViewModel(application: Application) : AndroidViewModel(applicati
                 price = price,
                 description = description.takeIf { it.isNotBlank() },
                 condition = condition,
-                location = location,
                 whatsappNumber = whatsappNumber,
                 imageFile = imageFile,
                 token = token

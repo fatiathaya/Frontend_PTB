@@ -68,6 +68,9 @@ dependencies {
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
     
+    // Material Icons Extended (untuk ikon Visibility/VisibilityOff)
+    implementation("androidx.compose.material:material-icons-extended")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -47,9 +47,14 @@ fun ProfileScreen(
     val user by viewModel.user
     val notifEnabled by viewModel.isNotificationEnabled
     
-    // Refresh user data when screen is displayed
-    LaunchedEffect(Unit) {
+    // Refresh user data and products when screen is displayed
+    DisposableEffect(Unit) {
+        // Always clear messages when returning to ProfileScreen
+        viewModel.clearMessages()
+        
         viewModel.loadUser()
+        viewModel.loadMyProducts() // Reload products to show latest changes
+        onDispose { }
     }
 
     Scaffold(

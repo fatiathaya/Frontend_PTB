@@ -52,10 +52,12 @@ fun HomeScreen(
     val selectedCategory by viewModel.selectedCategory
     val products = viewModel.products
     
-    // Pastikan status favorite ter-sync saat kembali ke HomeScreen
+    // Pastikan data ter-sync saat kembali ke HomeScreen
     // Gunakan DisposableEffect untuk memastikan sync setiap kali screen menjadi visible
     DisposableEffect(Unit) {
-        // Sync status favorite saat screen menjadi visible
+        // Reload products dan sync status favorite saat screen menjadi visible
+        // Ini memastikan produk baru yang ditambahkan langsung muncul
+        viewModel.loadProducts()
         viewModel.loadFavorites()
         onDispose { }
     }

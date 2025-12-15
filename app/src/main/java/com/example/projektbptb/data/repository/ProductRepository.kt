@@ -52,7 +52,6 @@ class ProductRepository {
         price: String,
         description: String?,
         condition: String?,
-        location: String?,
         whatsappNumber: String?,
         imageFile: File?,
         token: String
@@ -70,7 +69,6 @@ class ProductRepository {
                 val categoryBody: RequestBody = category.toRequestBody("text/plain".toMediaTypeOrNull())
                 val conditionBody: RequestBody = (condition ?: "").toRequestBody("text/plain".toMediaTypeOrNull())
                 val descriptionBody: RequestBody? = description?.takeIf { it.isNotBlank() }?.toRequestBody("text/plain".toMediaTypeOrNull())
-                val locationBody: RequestBody = (location ?: "").toRequestBody("text/plain".toMediaTypeOrNull())
                 val priceBody: RequestBody = price.toRequestBody("text/plain".toMediaTypeOrNull())
                 val whatsappNumberBody: RequestBody = (whatsappNumber ?: "").toRequestBody("text/plain".toMediaTypeOrNull())
                 
@@ -80,7 +78,6 @@ class ProductRepository {
                     category = categoryBody,
                     condition = conditionBody,
                     description = descriptionBody,
-                    location = locationBody,
                     price = priceBody,
                     whatsappNumber = whatsappNumberBody,
                     image = imagePart
@@ -105,25 +102,42 @@ class ProductRepository {
         price: String,
         description: String?,
         condition: String?,
-        location: String?,
         whatsappNumber: String?,
-        imageUrl: String?,
+        imageFile: File?,
         token: String
     ): Result<Product> {
         return withContext(Dispatchers.IO) {
             try {
-                val productData = mutableMapOf<String, Any>(
-                    "name" to name,
-                    "category" to category,
-                    "price" to price
-                )
-                description?.let { productData["description"] = it }
-                condition?.let { productData["condition"] = it }
-                location?.let { productData["location"] = it }
-                whatsappNumber?.let { productData["whatsapp_number"] = it }
-                imageUrl?.let { productData["image_url"] = it }
+                // Strip "Rp " and dots from price to get numeric value
+                val numericPrice = price.replace("Rp ", "").replace(".", "").trim()
                 
-                val response = productApiService.updateProduct("Bearer $token", id, productData)
+                // Create multipart request body parts
+                val nameBody = name.toRequestBody("text/plain".toMediaTypeOrNull())
+                val categoryBody = category.toRequestBody("text/plain".toMediaTypeOrNull())
+                val conditionBody = condition?.toRequestBody("text/plain".toMediaTypeOrNull())
+                val descriptionBody = description?.toRequestBody("text/plain".toMediaTypeOrNull())
+                val priceBody = numericPrice.toRequestBody("text/plain".toMediaTypeOrNull())
+                val whatsappBody = whatsappNumber?.toRequestBody("text/plain".toMediaTypeOrNull())
+                
+                // Create image part if file is provided
+                val imagePart = imageFile?.let {
+                    val requestFile = it.asRequestBody("image/*".toMediaTypeOrNull())
+                    MultipartBody.Part.createFormData("image", it.name, requestFile)
+                }
+                
+                val response = productApiService.updateProductMultipart(
+                    token = "Bearer $token",
+                    id = id,
+                    method = "PUT".toRequestBody("text/plain".toMediaTypeOrNull()),
+                    name = nameBody,
+                    category = categoryBody,
+                    condition = conditionBody,
+                    description = descriptionBody,
+                    price = priceBody,
+                    whatsappNumber = whatsappBody,
+                    image = imagePart
+                )
+                
                 if (response.isSuccessful && response.body()?.success == true) {
                     Result.success(response.body()!!.data!!.toProduct())
                 } else {
@@ -214,7 +228,6 @@ class ProductRepository {
             isFavorite = is_favorite,
             description = description,
             condition = condition,
-            location = location,
             whatsappNumber = whatsapp_number,
             sellerName = seller_name ?: "Penjual"
         )

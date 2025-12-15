@@ -12,7 +12,6 @@ data class Product(
     val isFavorite: Boolean = false,
     val description: String? = null,
     val condition: String? = null,
-    val location: String? = null,
     val whatsappNumber: String? = null,
     val sellerName: String? = null
 )

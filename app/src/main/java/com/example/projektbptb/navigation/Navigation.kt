@@ -1,6 +1,13 @@
 package com.example.projektbptb.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -116,7 +123,7 @@ fun NavigationGraph(navController: NavHostController) {
             )
         }
         
-        composable(Screen.Home.route) {
+        composable(Screen.Home.route) { backStackEntry ->
             // Use key to ensure same instance is used across screens
             val homeViewModel: com.example.projektbptb.viewmodel.HomeViewModel = viewModel(
                 key = "HomeViewModel",
@@ -124,6 +131,14 @@ fun NavigationGraph(navController: NavHostController) {
                     LocalContext.current.applicationContext as android.app.Application
                 )
             )
+            
+            // Reload products ketika kembali ke HomeScreen
+            // Menggunakan backStackEntry sebagai key untuk LaunchedEffect
+            androidx.compose.runtime.LaunchedEffect(backStackEntry) {
+                // Refresh products agar produk baru langsung muncul
+                homeViewModel.loadProducts()
+            }
+            
             HomeScreen(
                 viewModel = homeViewModel,
                 onNavigateToSettings = {
@@ -364,29 +379,58 @@ fun NavigationGraph(navController: NavHostController) {
                     LocalContext.current.applicationContext as android.app.Application
                 )
             )
-            val productName = backStackEntry.arguments?.getString("productName") ?: ""
-            val product = profileViewModel.myProducts.find { it.name == productName }
-                ?: com.example.projektbptb.data.model.Product(
-                    name = "",
-                    category = "",
-                    price = "Rp 0",
-                    imageRes = com.example.projektbptb.R.drawable.logo
-                )
             
-            EditProductScreen(
-                product = product,
-                onBackClick = {
-                    navController.popBackStack()
-                },
-                onEditClick = { updatedProduct ->
-                    profileViewModel.updateProduct(product, updatedProduct)
-                    navController.popBackStack()
-                },
-                onDeleteClick = {
-                    profileViewModel.deleteProduct(product)
-                    navController.popBackStack()
+            val productName = backStackEntry.arguments?.getString("productName") ?: ""
+            
+            // Use remember to track the product and update when myProducts changes
+            val product = remember(profileViewModel.myProducts.size, productName) {
+                profileViewModel.myProducts.find { it.name == productName }
+                    ?: com.example.projektbptb.data.model.Product(
+                        name = productName,
+                        category = "",
+                        price = "Rp 0",
+                        imageRes = com.example.projektbptb.R.drawable.logo
+                    )
+            }
+            
+            // Reload products to ensure fresh data - this will trigger recomposition
+            LaunchedEffect(Unit) {
+                profileViewModel.loadMyProducts()
+            }
+            
+            // Debug log to check product data
+            LaunchedEffect(product.id, product.description) {
+                android.util.Log.d("EditProduct", "Product data: id=${product.id}, name=${product.name}, " +
+                        "category=${product.category}, condition=${product.condition}, " +
+                        "description=${product.description}, price=${product.price}, " +
+                        "whatsapp=${product.whatsappNumber}")
+            }
+            
+            // Only show EditProductScreen when we have valid product data
+            if (product.id.isNotEmpty()) {
+                EditProductScreen(
+                    product = product,
+                    viewModel = profileViewModel,
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    onEditClick = { updatedProduct, imageFile ->
+                        profileViewModel.updateProduct(product, updatedProduct, imageFile)
+                    },
+                    onDeleteClick = {
+                        profileViewModel.deleteProduct(product)
+                        navController.popBackStack()
+                    }
+                )
+            } else {
+                // Show loading while data is being fetched
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
                 }
-            )
+            }
         }
 
         composable(Screen.AddProduct.route) {

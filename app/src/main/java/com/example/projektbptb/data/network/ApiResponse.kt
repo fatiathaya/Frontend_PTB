@@ -41,7 +41,6 @@ data class ProductResponse(
     val price: String,
     val description: String? = null,
     val condition: String? = null,
-    val location: String? = null,
     val whatsapp_number: String? = null,
     val image_url: String? = null,
     val user_id: Int? = null,

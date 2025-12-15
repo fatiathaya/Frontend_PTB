@@ -53,7 +53,6 @@ interface ProductApiService {
         @Part("category") category: RequestBody,
         @Part("condition") condition: RequestBody,
         @Part("description") description: RequestBody?,
-        @Part("location") location: RequestBody,
         @Part("price") price: RequestBody,
         @Part("whatsapp_number") whatsappNumber: RequestBody,
         @Part image: MultipartBody.Part?
@@ -64,6 +63,21 @@ interface ProductApiService {
         @Header("Authorization") token: String,
         @Path("id") id: Int,
         @Body product: Map<String, Any>
+    ): Response<ApiResponse<ProductResponse>>
+    
+    @Multipart
+    @POST("products/{id}")
+    suspend fun updateProductMultipart(
+        @Header("Authorization") token: String,
+        @Path("id") id: Int,
+        @Part("_method") method: RequestBody,
+        @Part("name") name: RequestBody,
+        @Part("category") category: RequestBody,
+        @Part("condition") condition: RequestBody?,
+        @Part("description") description: RequestBody?,
+        @Part("price") price: RequestBody,
+        @Part("whatsapp_number") whatsappNumber: RequestBody?,
+        @Part image: MultipartBody.Part?
     ): Response<ApiResponse<ProductResponse>>
     
     @DELETE("products/{id}")

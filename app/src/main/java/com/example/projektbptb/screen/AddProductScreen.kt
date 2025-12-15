@@ -3,6 +3,8 @@ package com.example.projektbptb.screen
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,6 +19,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -49,7 +53,6 @@ fun AddProductScreen(
     var condition by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var location by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
     var whatsappNumber by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -82,6 +85,26 @@ fun AddProductScreen(
             selectedImageFile = file
         }
     }
+    
+    // Animation states
+    var visible by remember { mutableStateOf(false) }
+    
+    // Animate screen entrance
+    LaunchedEffect(Unit) {
+        visible = true
+    }
+    
+    // Pulsing animation for image upload button
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = if (selectedImageUri == null) 1.05f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
     
     // Handle product creation success
     LaunchedEffect(isProductCreated) {
@@ -117,33 +140,46 @@ fun AddProductScreen(
             )
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(White)
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(animationSpec = tween(600)) + slideInVertically(
+                initialOffsetY = { it / 4 },
+                animationSpec = tween(600, easing = FastOutSlowInEasing)
+            )
         ) {
-            // Error message
-            errorMessage?.let { error ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFFFEBEE)),
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(White)
+                    .padding(innerPadding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                // Error message with animation
+                AnimatedVisibility(
+                    visible = errorMessage != null,
+                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+                ) {
+                    errorMessage?.let { error ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFFFEBEE)),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = error,
-                        color = androidx.compose.ui.graphics.Color(0xFFC62828),
-                        modifier = Modifier.padding(16.dp),
-                        fontSize = 14.sp
-                    )
+                            text = error,
+                            color = androidx.compose.ui.graphics.Color(0xFFC62828),
+                            modifier = Modifier.padding(16.dp),
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             }
             
-            // Foto Produk
+            // Foto Produk with animation
             Column {
                 Text(
                     "Foto Produk",
@@ -156,46 +192,80 @@ fun AddProductScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(200.dp)
+                        .scale(pulseScale)
                         .border(1.dp, Black, RoundedCornerShape(8.dp))
                         .background(White, RoundedCornerShape(8.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (selectedImageUri != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(selectedImageUri)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = "Selected Product Image",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.logo),
-                                contentDescription = "No Image",
-                                modifier = Modifier.size(48.dp)
+                    AnimatedContent(
+                        targetState = selectedImageUri,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.8f) togetherWith
+                                    fadeOut(animationSpec = tween(300)) + scaleOut(targetScale = 0.8f)
+                        },
+                        label = "imageTransition"
+                    ) { imageUri ->
+                        if (imageUri != null) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(imageUri)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "Selected Product Image",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
                             )
+                        } else {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.logo),
+                                    contentDescription = "No Image",
+                                    modifier = Modifier.size(48.dp)
+                                )
+                            }
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
+                
+                // Animated button
+                var buttonScale by remember { mutableStateOf(1f) }
+                val buttonAnimatedScale by animateFloatAsState(
+                    targetValue = buttonScale,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    ),
+                    label = "buttonScale"
+                )
+                
                 Button(
-                    onClick = { imagePickerLauncher.launch("image/*") },
+                    onClick = {
+                        buttonScale = 0.9f
+                        imagePickerLauncher.launch("image/*")
+                    },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = GreenPrimary
                     ),
                     shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .scale(buttonAnimatedScale)
                 ) {
                     Text("Pilih Foto", color = White, fontWeight = FontWeight.SemiBold)
+                }
+                
+                LaunchedEffect(buttonScale) {
+                    if (buttonScale != 1f) {
+                        kotlinx.coroutines.delay(100)
+                        buttonScale = 1f
+                    }
                 }
             }
 
@@ -348,30 +418,6 @@ fun AddProductScreen(
                 )
             }
 
-            // Lokasi
-            Column {
-                Text(
-                    "Lokasi",
-                    color = BluePrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                OutlinedTextField(
-                    value = location,
-                    onValueChange = { location = it },
-                    placeholder = { Text("Masukkan Lokasi", color = GrayDark) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = TextFieldDefaults.colors(
-                        focusedIndicatorColor = BluePrimary,
-                        unfocusedIndicatorColor = BluePrimary,
-                        focusedContainerColor = White,
-                        unfocusedContainerColor = White
-                    ),
-                    shape = RoundedCornerShape(8.dp)
-                )
-            }
-
             // Harga
             Column {
                 Text(
@@ -422,15 +468,25 @@ fun AddProductScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Tombol Tambah Produk
+            // Tombol Tambah Produk with animation
+            var submitButtonScale by remember { mutableStateOf(1f) }
+            val submitButtonAnimatedScale by animateFloatAsState(
+                targetValue = submitButtonScale,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow
+                ),
+                label = "submitButtonScale"
+            )
+            
             Button(
                 onClick = {
+                    submitButtonScale = 0.95f
                     viewModel.createProduct(
                         name = productName,
                         category = category,
                         condition = condition,
                         description = description,
-                        location = location,
                         price = price,
                         whatsappNumber = whatsappNumber,
                         imageFile = selectedImageFile
@@ -444,23 +500,41 @@ fun AddProductScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
+                    .scale(submitButtonAnimatedScale)
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = White
-                    )
-                } else {
-                    Text(
-                        "Tambah Produk",
-                        color = White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
+                AnimatedContent(
+                    targetState = isLoading,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(300)) togetherWith
+                                fadeOut(animationSpec = tween(300))
+                    },
+                    label = "buttonContent"
+                ) { loading ->
+                    if (loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = White
+                        )
+                    } else {
+                        Text(
+                            "Tambah Produk",
+                            color = White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                    }
+                }
+            }
+            
+            LaunchedEffect(submitButtonScale) {
+                if (submitButtonScale != 1f) {
+                    kotlinx.coroutines.delay(150)
+                    submitButtonScale = 1f
                 }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
+            }
         }
     }
 }

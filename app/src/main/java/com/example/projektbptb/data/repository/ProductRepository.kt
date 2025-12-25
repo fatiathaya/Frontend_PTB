@@ -1,6 +1,7 @@
 package com.example.projektbptb.data.repository
 
 import com.example.projektbptb.data.model.Product
+import com.example.projektbptb.data.model.ProductImage
 import com.example.projektbptb.data.network.NetworkModule
 import com.example.projektbptb.data.network.ProductResponse
 import kotlinx.coroutines.Dispatchers
@@ -15,10 +16,10 @@ import java.io.File
 class ProductRepository {
     private val productApiService = NetworkModule.productApiService
     
-    suspend fun getProducts(category: String? = null, search: String? = null, token: String? = null): Result<List<Product>> {
+    suspend fun getProducts(category: String? = null, search: String? = null, userId: Int? = null, token: String? = null): Result<List<Product>> {
         return withContext(Dispatchers.IO) {
             try {
-                val response = productApiService.getProducts(token?.let { "Bearer $it" }, category, search)
+                val response = productApiService.getProducts(token?.let { "Bearer $it" }, category, search, userId)
                 if (response.isSuccessful && response.body()?.success == true) {
                     val products = response.body()!!.data!!.map { it.toProduct() }
                     Result.success(products)
@@ -52,23 +53,37 @@ class ProductRepository {
         price: String,
         description: String?,
         condition: String?,
+        address: String?,
+        latitude: Double?,
+        longitude: Double?,
         whatsappNumber: String?,
         imageFile: File?,
+        imageFiles: List<File>? = null,
         token: String
     ): Result<Product> {
         return withContext(Dispatchers.IO) {
             try {
-                // Create multipart image part if file exists
+                // Legacy single image part (optional)
                 val imagePart: MultipartBody.Part? = imageFile?.let { file ->
                     val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
                     MultipartBody.Part.createFormData("image", file.name, requestFile)
                 }
+
+                // Multi-image parts (preferred) as Array
+                val imageParts: Array<MultipartBody.Part>? = imageFiles?.mapIndexed { index, file ->
+                    val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
+                    // Laravel expects images[] array
+                    MultipartBody.Part.createFormData("images[]", file.name.ifBlank { "image_$index.jpg" }, requestFile)
+                }?.toTypedArray()
                 
                 // Create RequestBody for string fields
                 val nameBody: RequestBody = name.toRequestBody("text/plain".toMediaTypeOrNull())
                 val categoryBody: RequestBody = category.toRequestBody("text/plain".toMediaTypeOrNull())
                 val conditionBody: RequestBody = (condition ?: "").toRequestBody("text/plain".toMediaTypeOrNull())
                 val descriptionBody: RequestBody? = description?.takeIf { it.isNotBlank() }?.toRequestBody("text/plain".toMediaTypeOrNull())
+                val addressBody: RequestBody? = address?.takeIf { it.isNotBlank() }?.toRequestBody("text/plain".toMediaTypeOrNull())
+                val latitudeBody: RequestBody? = latitude?.toString()?.toRequestBody("text/plain".toMediaTypeOrNull())
+                val longitudeBody: RequestBody? = longitude?.toString()?.toRequestBody("text/plain".toMediaTypeOrNull())
                 val priceBody: RequestBody = price.toRequestBody("text/plain".toMediaTypeOrNull())
                 val whatsappNumberBody: RequestBody = (whatsappNumber ?: "").toRequestBody("text/plain".toMediaTypeOrNull())
                 
@@ -78,9 +93,13 @@ class ProductRepository {
                     category = categoryBody,
                     condition = conditionBody,
                     description = descriptionBody,
+                    address = addressBody,
+                    latitude = latitudeBody,
+                    longitude = longitudeBody,
                     price = priceBody,
                     whatsappNumber = whatsappNumberBody,
-                    image = imagePart
+                    image = imagePart,
+                    images = imageParts
                 )
                 
                 if (response.isSuccessful && response.body()?.success == true && response.body()?.data != null) {
@@ -102,8 +121,13 @@ class ProductRepository {
         price: String,
         description: String?,
         condition: String?,
+        address: String?,
+        latitude: Double?,
+        longitude: Double?,
         whatsappNumber: String?,
         imageFile: File?,
+        imageFiles: List<File>?,
+        deleteImageIds: List<Int>?,
         token: String
     ): Result<Product> {
         return withContext(Dispatchers.IO) {
@@ -116,14 +140,32 @@ class ProductRepository {
                 val categoryBody = category.toRequestBody("text/plain".toMediaTypeOrNull())
                 val conditionBody = condition?.toRequestBody("text/plain".toMediaTypeOrNull())
                 val descriptionBody = description?.toRequestBody("text/plain".toMediaTypeOrNull())
+                val addressBody = address?.takeIf { it.isNotBlank() }?.toRequestBody("text/plain".toMediaTypeOrNull())
+                val latitudeBody = latitude?.toString()?.toRequestBody("text/plain".toMediaTypeOrNull())
+                val longitudeBody = longitude?.toString()?.toRequestBody("text/plain".toMediaTypeOrNull())
                 val priceBody = numericPrice.toRequestBody("text/plain".toMediaTypeOrNull())
                 val whatsappBody = whatsappNumber?.toRequestBody("text/plain".toMediaTypeOrNull())
                 
-                // Create image part if file is provided
+                // Create image part if file is provided (legacy single)
                 val imagePart = imageFile?.let {
                     val requestFile = it.asRequestBody("image/*".toMediaTypeOrNull())
                     MultipartBody.Part.createFormData("image", it.name, requestFile)
                 }
+                
+                // Create multiple image parts as Array
+                val imageParts = imageFiles?.mapIndexed { index, file ->
+                    val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
+                    MultipartBody.Part.createFormData("images[$index]", file.name, requestFile)
+                }?.toTypedArray()
+                
+                // Create delete image IDs as MultipartBody.Part array
+                // CRITICAL: Use index-based keys to avoid Laravel treating them as files
+                // Laravel expects delete_image_ids[0], delete_image_ids[1], etc. for arrays
+                val deleteImageIdParts = deleteImageIds?.mapIndexed { index, id ->
+                    val requestBody = id.toString().toRequestBody("text/plain".toMediaTypeOrNull())
+                    // Use indexed key format: delete_image_ids[0], delete_image_ids[1], etc.
+                    MultipartBody.Part.createFormData("delete_image_ids[$index]", id.toString(), requestBody)
+                }?.toTypedArray()
                 
                 val response = productApiService.updateProductMultipart(
                     token = "Bearer $token",
@@ -133,15 +175,31 @@ class ProductRepository {
                     category = categoryBody,
                     condition = conditionBody,
                     description = descriptionBody,
+                    address = addressBody,
+                    latitude = latitudeBody,
+                    longitude = longitudeBody,
                     price = priceBody,
                     whatsappNumber = whatsappBody,
-                    image = imagePart
+                    image = imagePart,
+                    images = imageParts,
+                    deleteImageIds = deleteImageIdParts
                 )
                 
                 if (response.isSuccessful && response.body()?.success == true) {
-                    Result.success(response.body()!!.data!!.toProduct())
+                    val updatedProduct = response.body()!!.data!!.toProduct()
+                    android.util.Log.d("ProductRepository", "Product updated successfully: " +
+                            "id=${updatedProduct.id}, " +
+                            "images=${updatedProduct.images?.size ?: 0}, " +
+                            "image IDs=${updatedProduct.images?.map { it.id }}")
+                    Result.success(updatedProduct)
                 } else {
-                    Result.failure(Exception(response.body()?.message ?: "Failed to update product"))
+                    val errorBody = response.errorBody()?.string()
+                    val errorMessage = response.body()?.message 
+                        ?: errorBody 
+                        ?: "Failed to update product (${response.code()})"
+                    android.util.Log.e("ProductRepository", "Update product failed: $errorMessage")
+                    android.util.Log.e("ProductRepository", "Error body: $errorBody")
+                    Result.failure(Exception(errorMessage))
                 }
             } catch (e: Exception) {
                 Result.failure(e)
@@ -164,6 +222,52 @@ class ProductRepository {
         }
     }
     
+    suspend fun deleteProductImage(productId: Int, imageId: Int, token: String): Result<Product> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = productApiService.deleteProductImage("Bearer $token", productId, imageId)
+                if (response.isSuccessful && response.body()?.success == true) {
+                    val data = response.body()!!.data!!
+                    val images = (data["images"] as? List<Map<String, Any>>)?.map { img ->
+                        ProductImage(
+                            id = (img["id"] as? Number)?.toInt() ?: 0,
+                            url = img["url"] as? String ?: ""
+                        )
+                    } ?: emptyList()
+                    
+                    // Create updated product with new images
+                    val updatedProduct = Product(
+                        id = (data["product_id"] as? Number)?.toInt()?.toString() ?: "",
+                        name = "", // Will be updated from existing product
+                        category = "",
+                        price = "",
+                        imageUrl = images.firstOrNull()?.url,
+                        images = images,
+                        description = null,
+                        condition = null,
+                        address = null,
+                        latitude = null,
+                        longitude = null,
+                        whatsappNumber = null,
+                        sellerName = null,
+                        isFavorite = false
+                    )
+                    Result.success(updatedProduct)
+                } else {
+                    val errorBody = response.errorBody()?.string()
+                    val errorMessage = response.body()?.message
+                        ?: errorBody
+                        ?: "Failed to delete image"
+                    android.util.Log.e("ProductRepository", "Delete image failed: $errorMessage")
+                    Result.failure(Exception(errorMessage))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ProductRepository", "Delete image error", e)
+                Result.failure(e)
+            }
+        }
+    }
+    
     suspend fun toggleFavorite(id: Int, token: String): Result<Product> {
         return withContext(Dispatchers.IO) {
             try {
@@ -171,7 +275,18 @@ class ProductRepository {
                 if (response.isSuccessful && response.body()?.success == true) {
                     Result.success(response.body()!!.data!!.toProduct())
                 } else {
-                    Result.failure(Exception(response.body()?.message ?: "Failed to toggle favorite"))
+                    // Coba baca error message dari response body atau error body
+                    val errorMessage = response.body()?.message 
+                        ?: response.errorBody()?.string()?.let { 
+                            // Coba parse JSON error jika ada
+                            try {
+                                val json = org.json.JSONObject(it)
+                                json.optString("message", "Failed to toggle favorite")
+                            } catch (e: Exception) {
+                                it
+                            }
+                        } ?: "Failed to toggle favorite"
+                    Result.failure(Exception(errorMessage))
                 }
             } catch (e: Exception) {
                 Result.failure(e)
@@ -208,28 +323,52 @@ class ProductRepository {
                 val response = productApiService.getMyProducts("Bearer $token")
                 if (response.isSuccessful && response.body()?.success == true) {
                     val products = response.body()!!.data!!.map { it.toProduct() }
+                    android.util.Log.d("ProductRepository", "getMyProducts: loaded ${products.size} products")
+                    products.forEach { product ->
+                        android.util.Log.d("ProductRepository", "Product: id=${product.id}, name=${product.name}, images=${product.images?.size ?: 0}, image IDs=${product.images?.map { it.id }}")
+                    }
                     Result.success(products)
                 } else {
-                    Result.failure(Exception(response.body()?.message ?: "Failed to get my products"))
+                    val errorMessage = response.body()?.message ?: "Failed to get my products"
+                    android.util.Log.e("ProductRepository", "getMyProducts failed: $errorMessage")
+                    Result.failure(Exception(errorMessage))
                 }
             } catch (e: Exception) {
+                android.util.Log.e("ProductRepository", "getMyProducts exception: ${e.message}", e)
                 Result.failure(e)
             }
         }
     }
     
-    private fun ProductResponse.toProduct(): Product {
+    fun ProductResponse.toProduct(): Product {
+        // Parse images array (preferred) or fallback to image_urls (legacy) or image_url (single)
+        val productImages = when {
+            !images.isNullOrEmpty() -> images.map { ProductImage(it.id, it.url) }
+            !image_urls.isNullOrEmpty() -> image_urls.mapIndexed { index, url -> ProductImage(index, url) }
+            !image_url.isNullOrEmpty() -> listOf(ProductImage(0, image_url))
+            else -> emptyList()
+        }
+        
         return Product(
             id = id.toString(),
             name = name,
             category = category,
             price = price,
-            imageUrl = image_url, // Use image_url from API
+            imageUrl = image_url, // Keep for backward compatibility
+            images = productImages,
             isFavorite = is_favorite,
             description = description,
             condition = condition,
+            address = address,
+            latitude = latitude,
+            longitude = longitude,
+            location = location, // Location field from database
             whatsappNumber = whatsapp_number,
-            sellerName = seller_name ?: "Penjual"
+            sellerName = seller_name ?: "Penjual",
+            sellerUsername = seller_username,
+            sellerProfileImage = seller_profile_image,
+            userId = user_id,
+            isOwnProduct = is_own_product
         )
     }
 }

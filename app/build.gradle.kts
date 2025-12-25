@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -37,6 +38,13 @@ android {
     buildFeatures {
         compose = true
     }
+    
+    // For Google Maps
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
 }
 
 dependencies {
@@ -68,8 +76,26 @@ dependencies {
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
     
+    // Image Cropper
+    implementation("com.vanniktech:android-image-cropper:4.5.0")
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    
     // Material Icons Extended (untuk ikon Visibility/VisibilityOff)
     implementation("androidx.compose.material:material-icons-extended")
+    
+    // Google Places for autocomplete (still needed for address suggestions)
+    implementation("com.google.android.libraries.places:places:3.3.0")
+    
+    // OpenStreetMap (OSMDroid) instead of Google Maps
+    implementation("org.osmdroid:osmdroid-android:6.1.16")
+    
+    // Location services (still needed for geocoding)
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    
+    // Firebase Cloud Messaging
+    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+    implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-analytics")
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

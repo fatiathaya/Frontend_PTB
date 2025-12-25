@@ -1,5 +1,7 @@
 package com.example.projektbptb.screen
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,9 +20,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -92,11 +96,16 @@ fun ProfileScreen(
             )
         },
         bottomBar = { 
+            val isProfileComplete = user?.let { 
+                !it.email.isNullOrBlank() && !it.phoneNumber.isNullOrBlank()
+            } ?: false
             BottomNavigationBar(
                 currentRoute = "settings",
+                isProfileComplete = isProfileComplete,
                 onNavigateToHome = onNavigateToHome,
                 onNavigateToSell = onNavigateToSell,
-                onNavigateToSettings = {}
+                onNavigateToSettings = {},
+                onNavigateToCompleteProfile = onNavigateToAddProfile
             )
         }
     ) { innerPadding ->
@@ -109,6 +118,105 @@ fun ProfileScreen(
         ) {
             Spacer(modifier = Modifier.height(20.dp))
 
+            // Warning Card for Incomplete Profile
+            val isProfileComplete = user?.let { 
+                !it.email.isNullOrBlank() && !it.phoneNumber.isNullOrBlank()
+            } ?: false
+            
+            if (!isProfileComplete && user != null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = OrangePrimary.copy(alpha = 0.1f)
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, OrangePrimary)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = OrangePrimary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Text(
+                                "Profil Belum Lengkap!",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Black
+                            )
+                        }
+                        
+                        Text(
+                            "Lengkapi profil Anda untuk bisa menjual produk:",
+                            fontSize = 14.sp,
+                            color = GrayDark
+                        )
+                        
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (user?.email.isNullOrBlank()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = null,
+                                        tint = RedPrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        "Email belum diisi",
+                                        fontSize = 13.sp,
+                                        color = GrayDark
+                                    )
+                                }
+                            }
+                            if (user?.phoneNumber.isNullOrBlank()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = null,
+                                        tint = RedPrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        "Nomor telepon belum diisi",
+                                        fontSize = 13.sp,
+                                        color = GrayDark
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Button(
+                            onClick = onNavigateToAddProfile,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = OrangePrimary
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                "Lengkapi Sekarang",
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // Avatar dengan Edit Icon
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -116,30 +224,46 @@ fun ProfileScreen(
             ) {
                 user?.let { currentUser ->
                     Box {
-                        if (currentUser.profileImageRes != 0) {
-                            Image(
-                                painter = painterResource(id = currentUser.profileImageRes),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(100.dp)
-                                    .clip(CircleShape)
-                                    .border(2.dp, GreenPrimary, CircleShape)
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(100.dp)
-                                    .clip(CircleShape)
-                                    .background(BlueLight)
-                                    .border(2.dp, GreenPrimary, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = currentUser.name.firstOrNull()?.toString() ?: "U",
-                                    fontSize = 40.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BluePrimary
+                        // Display profile image - prioritize server URL over local resource
+                        when {
+                            currentUser.profileImageUrl != null -> {
+                                AsyncImage(
+                                    model = currentUser.profileImageUrl,
+                                    contentDescription = "Profile Image",
+                                    modifier = Modifier
+                                        .size(100.dp)
+                                        .clip(CircleShape)
+                                        .border(2.dp, GreenPrimary, CircleShape),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                    error = painterResource(id = R.drawable.logo)
                                 )
+                            }
+                            currentUser.profileImageRes != 0 -> {
+                                Image(
+                                    painter = painterResource(id = currentUser.profileImageRes),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(100.dp)
+                                        .clip(CircleShape)
+                                        .border(2.dp, GreenPrimary, CircleShape)
+                                )
+                            }
+                            else -> {
+                                Box(
+                                    modifier = Modifier
+                                        .size(100.dp)
+                                        .clip(CircleShape)
+                                        .background(BlueLight)
+                                        .border(2.dp, GreenPrimary, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = currentUser.name.firstOrNull()?.toString() ?: "U",
+                                        fontSize = 40.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BluePrimary
+                                    )
+                                }
                             }
                         }
                         // Edit Icon di pojok kanan bawah
@@ -179,46 +303,49 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Tombol Edit Profile dan Hapus Foto Profile
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Button(
-                    onClick = { onNavigateToAddProfile() },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = BluePrimary
-                    ),
-                    shape = RoundedCornerShape(8.dp),
+            // Tombol Edit Profile dan Hapus Foto Profile - hanya tampil jika profil lengkap
+            if (isProfileComplete) {
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        "Edit Profile",
-                        color = White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp
-                    )
-                }
-                Button(
-                    onClick = { /* TODO: Handle delete profile */ },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = BluePrimary
-                    ),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp)
-                ) {
-                    Text(
-                        "Hapus Foto Profile",
-                        color = White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp
-                    )
+                    Button(
+                        onClick = { onNavigateToAddProfile() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BluePrimary
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp)
+                    ) {
+                        Text(
+                            "Edit Profile",
+                            color = White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp
+                        )
+                    }
+                    Button(
+                        onClick = { viewModel.deleteProfileImage() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = RedPrimary
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp),
+                        enabled = user?.profileImageUrl != null
+                    ) {
+                        Text(
+                            "Hapus Foto Profile",
+                            color = White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp
+                        )
+                    }
                 }
             }
 
@@ -290,6 +417,8 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             val myProducts = viewModel.myProducts
+            val deletingProductId by viewModel.deletingProductId
+            
             if (myProducts.isEmpty()) {
                 Text(
                     "Belum ada produk",
@@ -301,11 +430,34 @@ fun ProfileScreen(
                 )
             } else {
                 myProducts.forEach { product ->
-                    ProductItem(
-                        product = product,
-                        onEditClick = { onNavigateToEditProduct(product) },
-                        onDeleteClick = { viewModel.deleteProduct(product) }
-                    )
+                    // Animated product item with slide-out and fade-out animation
+                    AnimatedVisibility(
+                        visible = deletingProductId != product.id,
+                        exit = slideOutHorizontally(
+                            targetOffsetX = { -it },
+                            animationSpec = tween(
+                                durationMillis = 400,
+                                easing = FastOutSlowInEasing
+                            )
+                        ) + fadeOut(
+                            animationSpec = tween(
+                                durationMillis = 400,
+                                easing = FastOutSlowInEasing
+                            )
+                        ) + scaleOut(
+                            targetScale = 0.8f,
+                            animationSpec = tween(
+                                durationMillis = 400,
+                                easing = FastOutSlowInEasing
+                            )
+                        )
+                    ) {
+                        ProductItem(
+                            product = product,
+                            onEditClick = { onNavigateToEditProduct(product) },
+                            onDeleteClick = { viewModel.deleteProduct(product) }
+                        )
+                    }
                     Spacer(modifier = Modifier.height(12.dp))
                 }
             }
@@ -342,6 +494,50 @@ fun ProductItem(
     onDeleteClick: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    
+    // Delete confirmation dialog with animation
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = RedPrimary,
+                    modifier = Modifier.size(48.dp)
+                )
+            },
+            title = {
+                Text(
+                    "Hapus Produk?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    "Apakah Anda yakin ingin menghapus \"${product.name}\"? Tindakan ini tidak dapat dibatalkan.",
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteDialog = false
+                        onDeleteClick()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = RedPrimary)
+                ) {
+                    Text("Hapus")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 
     Card(
         modifier = Modifier
@@ -421,13 +617,23 @@ fun ProductItem(
                         onClick = {
                             showMenu = false
                             onEditClick()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.Edit, contentDescription = null)
                         }
                     )
                     DropdownMenuItem(
                         text = { Text("Hapus", color = RedPrimary) },
                         onClick = {
                             showMenu = false
-                            onDeleteClick()
+                            showDeleteDialog = true
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = null,
+                                tint = RedPrimary
+                            )
                         }
                     )
                 }

@@ -9,11 +9,10 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,8 +27,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.projektbptb.R
 import com.example.projektbptb.ui.theme.*
+import com.example.projektbptb.viewmodel.SearchViewModel
 
 data class SearchCategory(
     val name: String,
@@ -39,22 +40,73 @@ data class SearchCategory(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
+    viewModel: SearchViewModel = viewModel(),
     onBackClick: () -> Unit = {},
     onSearchQuery: (String) -> Unit = {},
     onCategoryClick: (String) -> Unit = {}
 ) {
     var searchText by remember { mutableStateOf("") }
-    var searchHistory by remember { mutableStateOf(listOf("Baju", "Meja", "Kursi", "Celana")) }
+    val searchHistory = viewModel.searchHistory
+    val isLoading by viewModel.isLoading
+    val errorMessage by viewModel.errorMessage
     var isHistoryVisible by remember { mutableStateOf(true) }
     var showMoreHistory by remember { mutableStateOf(false) }
+    var showClearDialog by remember { mutableStateOf(false) }
+    
+    // Refresh search history saat screen muncul
+    LaunchedEffect(Unit) {
+        viewModel.loadSearchHistory()
+    }
+    
+    // Clear all history confirmation dialog
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = RedPrimary,
+                    modifier = Modifier.size(48.dp)
+                )
+            },
+            title = {
+                Text(
+                    "Hapus Semua Riwayat?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    "Apakah Anda yakin ingin menghapus semua riwayat pencarian?",
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showClearDialog = false
+                        viewModel.clearAllHistory()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = RedPrimary)
+                ) {
+                    Text("Hapus Semua")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 
     val categories = listOf(
-        SearchCategory("Perabotan", R.drawable.teddy),
-        SearchCategory("Elektronik", R.drawable.teddy),
-        SearchCategory("Kasur", R.drawable.teddy),
-        SearchCategory("Pakaian", R.drawable.dress),
-        SearchCategory("Barang Kuliah", R.drawable.toy),
-        SearchCategory("Sepatu", R.drawable.shoes)
+        SearchCategory("Perabotan", R.drawable.perabotan),
+        SearchCategory("Elektronik", R.drawable.elektronik),
+        SearchCategory("Pakaian", R.drawable.pakaian),
+        SearchCategory("Perlengkapan Kuliah", R.drawable.kuliah),
+        SearchCategory("Sepatu", R.drawable.sepatu)
     )
 
     Scaffold(
@@ -92,10 +144,8 @@ fun SearchScreen(
                         keyboardActions = KeyboardActions(
                             onSearch = {
                                 if (searchText.isNotBlank()) {
-                                    // Tambahkan ke history jika belum ada
-                                    if (!searchHistory.contains(searchText.trim())) {
-                                        searchHistory = listOf(searchText.trim()) + searchHistory.take(9)
-                                    }
+                                    // Save to search history via API
+                                    viewModel.saveSearchQuery(searchText.trim())
                                     onSearchQuery(searchText.trim())
                                 }
                             }
@@ -117,88 +167,291 @@ fun SearchScreen(
             )
         }
     ) { innerPadding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .background(White)
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
-            // History Section
-            if (searchHistory.isNotEmpty() && isHistoryVisible) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "History",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Black
-                    )
-                    TextButton(onClick = { isHistoryVisible = false }) {
-                        Text("Hide", color = BluePrimary, fontSize = 14.sp)
-                    }
-                }
-
-                // History Items
-                val displayedHistory = if (showMoreHistory) searchHistory else searchHistory.take(4)
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(displayedHistory) { historyItem ->
-                        HistoryItem(
-                            text = historyItem,
-                            onItemClick = {
-                                searchText = historyItem
-                                onSearchQuery(historyItem)
-                            },
-                            onDeleteClick = {
-                                searchHistory = searchHistory.filter { it != historyItem }
-                            }
+            // Loading state
+            if (isLoading) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = BluePrimary,
+                            modifier = Modifier.size(32.dp)
                         )
                     }
-                    
-                    if (searchHistory.size > 4 && !showMoreHistory) {
-                        item {
-                            TextButton(
-                                onClick = { showMoreHistory = true },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("More", color = BluePrimary, fontSize = 14.sp)
-                            }
+                }
+            }
+            
+            // Error message
+            errorMessage?.let { error ->
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = RedPrimary.copy(alpha = 0.1f)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = RedPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = error,
+                                fontSize = 12.sp,
+                                color = RedPrimary
+                            )
                         }
                     }
                 }
             }
+            
+            // History Section
+            if (searchHistory.isNotEmpty() && isHistoryVisible && !isLoading) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.History,
+                                contentDescription = null,
+                                tint = BluePrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "Riwayat Pencarian",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Black
+                            )
+                        }
+                        TextButton(onClick = { showClearDialog = true }) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = null,
+                                    tint = RedPrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text("Hapus Semua", color = RedPrimary, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                // History Items - tampilkan semua jika showMoreHistory
+                val displayedHistory = if (showMoreHistory) searchHistory else searchHistory.take(5)
+                items(displayedHistory) { historyItem ->
+                    HistoryItem(
+                        text = historyItem.query,
+                        onItemClick = {
+                            searchText = historyItem.query
+                            viewModel.saveSearchQuery(historyItem.query)
+                            onSearchQuery(historyItem.query)
+                        },
+                        onDeleteClick = {
+                            viewModel.deleteSearchHistory(historyItem.id)
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                
+                // Tombol "Lihat Lainnya" jika ada lebih dari 5 riwayat
+                if (searchHistory.size > 5 && !showMoreHistory) {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .clickable { showMoreHistory = true },
+                            colors = CardDefaults.cardColors(containerColor = BlueLight),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "Lihat Lainnya (${searchHistory.size - 5} lagi)",
+                                    color = BluePrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = BluePrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                // Tombol "Sembunyikan" jika sudah expand
+                if (showMoreHistory && searchHistory.size > 5) {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .clickable { showMoreHistory = false },
+                            colors = CardDefaults.cardColors(containerColor = GrayLight),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "Sembunyikan",
+                                    color = GrayDark,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    Icons.Default.KeyboardArrowUp,
+                                    contentDescription = null,
+                                    tint = GrayDark,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            } else if (searchHistory.isEmpty() && !isLoading) {
+                // Empty state for search history
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 48.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.History,
+                            contentDescription = null,
+                            tint = GrayDark,
+                            modifier = Modifier.size(64.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Belum ada riwayat pencarian",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Black
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Cari produk untuk membuat riwayat",
+                            fontSize = 14.sp,
+                            color = GrayDark
+                        )
+                    }
+                }
+            }
+            
+            // Divider setelah riwayat (jika ada)
+            if (searchHistory.isNotEmpty() && isHistoryVisible) {
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(GrayLight)
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
 
             // Search by Category Section
-            Text(
-                text = "Search by category",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Black,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
-
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(bottom = 20.dp)
-            ) {
-                items(categories) { category ->
-                    CategoryCard(
-                        category = category,
-                        onClick = { onCategoryClick(category.name) }
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                ) {
+                    Icon(
+                        Icons.Default.GridView,
+                        contentDescription = null,
+                        tint = BluePrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Cari Berdasarkan Kategori",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Black
                     )
                 }
+            }
+
+            items(categories.chunked(2)) { rowCategories ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    rowCategories.forEach { category ->
+                        Box(modifier = Modifier.weight(1f)) {
+                            CategoryCard(
+                                category = category,
+                        onClick = {
+                            // Simpan juga kategori sebagai riwayat pencarian
+                            viewModel.saveSearchQuery(category.name)
+                            onCategoryClick(category.name)
+                        }
+                            )
+                        }
+                    }
+                    // Fill remaining space if odd number
+                    if (rowCategories.size < 2) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+            
+            // Bottom padding
+            item {
+                Spacer(modifier = Modifier.height(20.dp))
             }
         }
     }
@@ -210,48 +463,53 @@ fun HistoryItem(
     onItemClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
-    Row(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onItemClick() }
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .clickable { onItemClick() },
+        colors = CardDefaults.cardColors(containerColor = GrayLight),
+        shape = RoundedCornerShape(8.dp)
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Icon history sederhana menggunakan Box dengan background
-            Box(
-                modifier = Modifier
-                    .size(20.dp)
-                    .background(GrayDark.copy(alpha = 0.2f), RoundedCornerShape(4.dp)),
-                contentAlignment = Alignment.Center
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
             ) {
+                Icon(
+                    Icons.Default.History,
+                    contentDescription = null,
+                    tint = BluePrimary,
+                    modifier = Modifier.size(20.dp)
+                )
                 Text(
-                    text = "H",
-                    fontSize = 10.sp,
-                    color = GrayDark,
-                    fontWeight = FontWeight.Bold
+                    text = text,
+                    fontSize = 14.sp,
+                    color = Black,
+                    fontWeight = FontWeight.Medium
                 )
             }
-            Text(
-                text = text,
-                fontSize = 14.sp,
-                color = Black
-            )
-        }
-        IconButton(
-            onClick = onDeleteClick,
-            modifier = Modifier.size(32.dp)
-        ) {
-            Icon(
-                Icons.Default.Close,
-                contentDescription = "Delete",
-                tint = BluePrimary,
-                modifier = Modifier.size(18.dp)
-            )
+            
+            // Tombol X untuk hapus
+            IconButton(
+                onClick = onDeleteClick,
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(White, CircleShape)
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Hapus riwayat",
+                    tint = RedPrimary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }

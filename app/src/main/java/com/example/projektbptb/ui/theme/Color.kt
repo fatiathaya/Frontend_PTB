@@ -13,3 +13,5 @@ val GrayLight = Color(0xFFF6F6F6)
 val GrayDark = Color(0xFF444444)
 val GreenPrimary = Color(0xFF4CAF50)  // Hijau untuk tombol
 val RedPrimary = Color(0xFFE53935)    // Merah untuk favorite
+val OrangePrimary = Color(0xFFFF9800) // Orange untuk warning
+

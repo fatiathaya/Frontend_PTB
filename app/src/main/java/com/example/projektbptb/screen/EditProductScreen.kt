@@ -9,13 +9,22 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,6 +39,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.projektbptb.R
 import com.example.projektbptb.data.model.Product
+import com.example.projektbptb.ui.components.AddressInput
 import com.example.projektbptb.ui.theme.*
 import java.io.File
 
@@ -48,12 +58,73 @@ fun EditProductScreen(
     // Pre-fill with existing product data
     var productName by remember { mutableStateOf(product.name) }
     var condition by remember { mutableStateOf(product.condition ?: "Bekas") }
-    var category by remember { mutableStateOf(product.category) }
+    var category by remember {
+        mutableStateOf(
+            when (product.category) {
+                "Baju" -> "Pakaian"
+                "Kulia" -> "Perlengkapan Kuliah"
+                else -> product.category
+            }
+        )
+    }
     var description by remember { mutableStateOf(product.description ?: "") }
+    var address by remember { mutableStateOf(product.address ?: "") }
+    var latitude by remember { mutableStateOf(product.latitude) }
+    var longitude by remember { mutableStateOf(product.longitude) }
     var price by remember { mutableStateOf(product.price.replace("Rp ", "").replace(".", "").trim()) }
     var whatsappNumber by remember { mutableStateOf(product.whatsappNumber ?: "") }
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
-    var selectedImageFile by remember { mutableStateOf<File?>(null) }
+    // Multi-image support
+    data class ImageItem(
+        val id: String, // "existing_$id" or "new_$timestamp"
+        val uri: Uri? = null,
+        val url: String? = null,
+        val file: File? = null,
+        val isExisting: Boolean = false
+    )
+    
+    val selectedImages = remember { mutableStateListOf<ImageItem>() }
+    
+    // CRITICAL: Store original product images to track deletions
+    // This is used to determine which images were deleted when user clicks Save
+    val originalProductImages = remember(product.id) {
+        val images = product.images.toList()
+        android.util.Log.d("EditProductScreen", "Storing original images: ${images.size} images with IDs: ${images.map { it.id }}")
+        images
+    }
+    
+    // CRITICAL: Initialize selectedImages when screen first opens
+    // This runs when product.id changes (when navigating to this screen)
+    LaunchedEffect(product.id) {
+        if (product.id.isNotEmpty()) {
+            android.util.Log.d("EditProductScreen", "=== INITIALIZING SCREEN ===")
+            android.util.Log.d("EditProductScreen", "Product loaded - id=${product.id}, images=${product.images.size}, image IDs=${product.images.map { it.id }}")
+            
+            // Clear all images first
+            selectedImages.clear()
+            
+            // Load all existing images from product.images (multi-image support)
+            if (product.images.isNotEmpty()) {
+                product.images.forEach { img ->
+                    selectedImages.add(ImageItem("existing_${img.id}", url = img.url, isExisting = true))
+                }
+            } else {
+                // Fallback to single imageUrl for backward compatibility
+                product.imageUrl?.let { url ->
+                    selectedImages.add(ImageItem("existing_0", url = url, isExisting = true))
+                }
+            }
+            
+            android.util.Log.d("EditProductScreen", "Initialized selectedImages: ${selectedImages.size} images")
+            android.util.Log.d("EditProductScreen", "Original images stored: ${originalProductImages.size} images with IDs: ${originalProductImages.map { it.id }}")
+        }
+    }
+    
+    
+    // ========================================
+    // LaunchedEffect(productImagesKey) DIHAPUS
+    // Ini menyebabkan INFINITE LOOP!
+    // JANGAN DITAMBAHKAN KEMBALI!
+    // ========================================
     
     // Clear any previous success/error messages when screen opens
     LaunchedEffect(Unit) {
@@ -63,25 +134,22 @@ fun EditProductScreen(
     // Debug log
     LaunchedEffect(product) {
         android.util.Log.d("EditProductScreen", "Initializing with product: " +
-                "name='$productName', category='$category', condition='$condition', " +
-                "description='$description', price='$price', whatsapp='$whatsappNumber'")
+                "id=${product.id}, name='$productName', category='$category', condition='$condition', " +
+                "description='$description', price='$price', whatsapp='$whatsappNumber', " +
+                "images=${product.images.size}")
     }
     
-    // Show success message and navigate back
-    // Both update and delete will auto-navigate back to Profile
+    // Show success message - STAY on edit screen (no navigation)
     LaunchedEffect(viewModel.successMessage.value) {
         val message = viewModel.successMessage.value
         if (!message.isNullOrEmpty()) {
-            // Show snackbar first
+            // Show snackbar only
             snackbarHostState.showSnackbar(
                 message = message,
                 duration = SnackbarDuration.Short
             )
             viewModel.successMessage.value = null
-            
-            // Navigate back after showing message (for both update and delete)
-            kotlinx.coroutines.delay(500) // Give time to see the message
-            onBackClick()
+            // NO onBackClick() - stay on edit screen
         }
     }
     
@@ -102,23 +170,25 @@ fun EditProductScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     
     val conditions = listOf("Baru", "Bekas", "Sangat Baik", "Baik", "Cukup")
-    val categories = listOf("Baju", "Perabotan", "Elektronik", "Kulia", "Sepatu")
+    val categories = listOf("Pakaian", "Perabotan", "Elektronik", "Perlengkapan Kuliah", "Sepatu")
     
-    // Image picker launcher
+    // Multi-image picker launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let {
-            selectedImageUri = it
-            // Convert URI to File
-            val inputStream = context.contentResolver.openInputStream(it)
-            val file = File(context.cacheDir, "product_image_${System.currentTimeMillis()}.jpg")
-            inputStream?.use { input ->
-                file.outputStream().use { output ->
-                    input.copyTo(output)
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        uris.forEach { uri ->
+            val timestamp = System.currentTimeMillis()
+            val file = File(context.cacheDir, "product_image_$timestamp.jpg")
+            try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    file.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
                 }
+                selectedImages.add(ImageItem("new_$timestamp", uri = uri, file = file, isExisting = false))
+            } catch (e: Exception) {
+                android.util.Log.e("EditProductScreen", "Error saving image: ${e.message}")
             }
-            selectedImageFile = file
         }
     }
     
@@ -225,77 +295,201 @@ fun EditProductScreen(
             ) {
                 // Foto Produk
                 Column {
-                    Text(
-                        "Foto Produk",
-                        color = BluePrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .border(1.dp, Black, RoundedCornerShape(8.dp))
-                            .background(White, RoundedCornerShape(8.dp)),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        AnimatedContent(
-                            targetState = selectedImageUri ?: product.imageUrl,
-                            transitionSpec = {
-                                fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.8f) togetherWith
-                                        fadeOut(animationSpec = tween(300)) + scaleOut(targetScale = 0.8f)
-                            },
-                            label = "imageTransition"
-                        ) { imageSource ->
-                            when {
-                                selectedImageUri != null -> {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context)
-                                            .data(selectedImageUri)
-                                            .crossfade(true)
-                                            .build(),
-                                        contentDescription = "Selected Product Image",
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .clip(RoundedCornerShape(8.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-                                product.imageUrl != null -> {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context)
-                                            .data(product.imageUrl)
-                                            .crossfade(true)
-                                            .build(),
-                                        contentDescription = "Current Product Image",
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .clip(RoundedCornerShape(8.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-                                product.imageRes != 0 -> {
-                                    Image(
-                                        painter = painterResource(id = product.imageRes),
-                                        contentDescription = "Current Product Image",
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .clip(RoundedCornerShape(8.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-                                else -> {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.logo),
-                                        contentDescription = "No Image",
-                                        modifier = Modifier.size(48.dp)
-                                    )
+                        Text(
+                            "Foto Produk",
+                            color = BluePrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                        // Counter badge
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = BlueLight),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "${selectedImages.size}/6",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = BluePrimary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                    
+                    if (selectedImages.isNotEmpty()) {
+                        // Grid layout for images (2 columns)
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height((if (selectedImages.size <= 2) 200 else if (selectedImages.size <= 4) 400 else 600).dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            itemsIndexed(selectedImages) { index, imageItem ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(1f)
+                                        .height(180.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        when {
+                                            imageItem.uri != null -> {
+                                                AsyncImage(
+                                                    model = ImageRequest.Builder(context)
+                                                        .data(imageItem.uri)
+                                                        .crossfade(true)
+                                                        .build(),
+                                                    contentDescription = "Selected Product Image ${index + 1}",
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                            }
+                                            imageItem.url != null -> {
+                                                AsyncImage(
+                                                    model = ImageRequest.Builder(context)
+                                                        .data(imageItem.url)
+                                                        .crossfade(true)
+                                                        .build(),
+                                                    contentDescription = "Existing Product Image ${index + 1}",
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                            }
+                                            else -> {
+                                                Image(
+                                                    painter = painterResource(id = R.drawable.logo),
+                                                    contentDescription = "No Image",
+                                                    modifier = Modifier.size(48.dp)
+                                                )
+                                            }
+                                        }
+
+                                        // Cover badge for first image
+                                        if (index == 0) {
+                                            Card(
+                                                modifier = Modifier
+                                                    .align(Alignment.TopStart)
+                                                    .padding(8.dp),
+                                                colors = CardDefaults.cardColors(containerColor = BluePrimary.copy(alpha = 0.9f)),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Cover",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = White,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+
+                                        // Delete button (X) overlay
+                                        Card(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .padding(8.dp),
+                                            colors = CardDefaults.cardColors(containerColor = White),
+                                            shape = CircleShape,
+                                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                                        ) {
+                                            IconButton(
+                                                onClick = {
+                                                    try {
+                                                        android.util.Log.d("EditProductScreen", "Deleting image: id=${imageItem.id}, isExisting=${imageItem.isExisting}, index=$index")
+                                                        
+                                                        if (!imageItem.isExisting) {
+                                                            // New image (not yet saved) - just remove from list and delete file
+                                                            imageItem.file?.delete()
+                                                            if (index >= 0 && index < selectedImages.size) {
+                                                                selectedImages.removeAt(index)
+                                                            }
+                                                            android.util.Log.d("EditProductScreen", "Deleted new image file: ${imageItem.file?.name}")
+                                                        } else {
+                                                            // Existing image - delete from database immediately
+                                                            val imageId = imageItem.id.removePrefix("existing_").toIntOrNull()
+                                                            if (imageId != null && product.id.isNotEmpty()) {
+                                                                android.util.Log.d("EditProductScreen", "Deleting existing image from database: imageId=$imageId, productId=${product.id}")
+                                                                viewModel.deleteProductImage(product.id, imageId)
+                                                                
+                                                                // Remove from UI immediately (will be updated when response comes)
+                                                                if (index >= 0 && index < selectedImages.size) {
+                                                                    selectedImages.removeAt(index)
+                                                                }
+                                                            } else {
+                                                                android.util.Log.e("EditProductScreen", "Cannot delete: invalid imageId=$imageId or productId=${product.id}")
+                                                            }
+                                                        }
+                                                    } catch (e: Exception) {
+                                                        android.util.Log.e("EditProductScreen", "Error deleting image: ${e.message}", e)
+                                                    }
+                                                },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Close,
+                                                    contentDescription = "Hapus gambar",
+                                                    tint = RedPrimary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
+                    } else {
+                        // Empty state
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = GrayLight),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Icon(
+                                    Icons.Default.AddPhotoAlternate,
+                                    contentDescription = "No Image",
+                                    tint = GrayDark,
+                                    modifier = Modifier.size(64.dp)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "Belum ada foto",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Black
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Maksimal 6 foto",
+                                    fontSize = 12.sp,
+                                    color = GrayDark
+                                )
+                            }
+                        }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
                     
                     // Animated button
                     var buttonScale by remember { mutableStateOf(1f) }
@@ -311,17 +505,25 @@ fun EditProductScreen(
                     Button(
                         onClick = {
                             buttonScale = 0.9f
-                            imagePickerLauncher.launch("image/*")
+                            if (selectedImages.size < 6) {
+                                imagePickerLauncher.launch("image/*")
+                            }
                         },
+                        enabled = selectedImages.size < 6,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = GreenPrimary
+                            containerColor = GreenPrimary,
+                            disabledContainerColor = GrayDark
                         ),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .scale(buttonAnimatedScale)
                     ) {
-                        Text("Ubah Foto", color = White, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (selectedImages.isEmpty()) "Pilih Foto" else "Tambah Foto",
+                            color = White,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                     
                     LaunchedEffect(buttonScale) {
@@ -500,6 +702,17 @@ fun EditProductScreen(
                     )
                 }
 
+                // Alamat
+                AddressInput(
+                    address = address,
+                    onAddressChange = { addr, lat, lng ->
+                        address = addr
+                        latitude = lat
+                        longitude = lng
+                    },
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
                 // No Whatsapp
                 Column {
                     Text(
@@ -560,11 +773,51 @@ fun EditProductScreen(
                                     price = "Rp $price",
                                     description = description.ifBlank { null },
                                     condition = condition,
+                                    address = address.ifBlank { null },
+                                    latitude = latitude,
+                                    longitude = longitude,
                                     whatsappNumber = whatsappNumber.ifBlank { null },
                                     imageUrl = product.imageUrl // Keep existing image URL if no new image
                                 )
-                                // Pass both updated product and image file (if any)
-                                onEditClick(updatedProduct, selectedImageFile)
+                                
+                                // Separate new images and existing images to delete
+                                val newImageFiles = selectedImages.filter { !it.isExisting && it.file != null }.mapNotNull { it.file }
+                                
+                                // CRITICAL: Track which existing images were deleted
+                                // Use originalProductImages (stored when screen opened) to track deletions
+                                // This ensures we track deletions correctly even if product.images changes
+                                val originalImageIds = originalProductImages.map { it.id }.toSet()
+                                
+                                // currentExistingIds = image IDs that are still in selectedImages (not deleted by user)
+                                val currentExistingIds = selectedImages
+                                    .filter { it.isExisting }
+                                    .mapNotNull { it.id.removePrefix("existing_").toIntOrNull() }
+                                    .toSet()
+                                
+                                // deleteImageIds = images that were in original but are NOT in current (deleted by user)
+                                val deleteImageIds = originalImageIds.filter { it !in currentExistingIds }
+                                
+                                android.util.Log.d("EditProductScreen", "=== SUBMITTING UPDATE ===")
+                                android.util.Log.d("EditProductScreen", "Original image IDs (from product): $originalImageIds")
+                                android.util.Log.d("EditProductScreen", "Current existing IDs (still in UI): $currentExistingIds")
+                                android.util.Log.d("EditProductScreen", "Images to DELETE from database: $deleteImageIds")
+                                android.util.Log.d("EditProductScreen", "New images to UPLOAD: ${newImageFiles.size}")
+                                
+                                // CRITICAL: Ensure deleteImageIds is sent even if empty list
+                                // Backend expects null or array, so we send null if empty, or list if not empty
+                                val deleteIdsToSend = if (deleteImageIds.isNotEmpty()) {
+                                    deleteImageIds.toList()
+                                } else {
+                                    null
+                                }
+                                
+                                // Pass updated product, new image files, and delete IDs
+                                viewModel.updateProduct(
+                                    oldProduct = product,
+                                    newProduct = updatedProduct,
+                                    imageFiles = newImageFiles.ifEmpty { null },
+                                    deleteImageIds = deleteIdsToSend
+                                )
                             }
                         },
                         enabled = !viewModel.isUpdating.value,

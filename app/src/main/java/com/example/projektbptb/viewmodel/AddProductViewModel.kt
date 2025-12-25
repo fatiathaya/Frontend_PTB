@@ -23,9 +23,12 @@ class AddProductViewModel(application: Application) : AndroidViewModel(applicati
         category: String,
         condition: String,
         description: String,
+        address: String?,
+        latitude: Double?,
+        longitude: Double?,
         price: String,
         whatsappNumber: String,
-        imageFile: File?
+        imageFiles: List<File>
     ) {
         val token = authRepository.getToken() ?: run {
             errorMessage.value = "Anda belum login"
@@ -64,8 +67,12 @@ class AddProductViewModel(application: Application) : AndroidViewModel(applicati
                 price = price,
                 description = description.takeIf { it.isNotBlank() },
                 condition = condition,
+                address = address?.takeIf { it.isNotBlank() },
+                latitude = latitude,
+                longitude = longitude,
                 whatsappNumber = whatsappNumber,
-                imageFile = imageFile,
+                imageFile = null,
+                imageFiles = imageFiles,
                 token = token
             )
                 .onSuccess {

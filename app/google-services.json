@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "409282796428",
+    "project_id": "splg-a5717",
+    "storage_bucket": "splg-a5717.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:409282796428:android:075acadf167167b15fd4a9",
+        "android_client_info": {
+          "package_name": "com.example.projektbptb"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBWac8Kj7fOB-bQDN-C-j0P_8-YALvlc_k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

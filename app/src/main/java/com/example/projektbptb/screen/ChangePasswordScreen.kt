@@ -8,21 +8,32 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModelProvider
 import com.example.projektbptb.ui.theme.*
+import com.example.projektbptb.viewmodel.ChangePasswordViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChangePasswordScreen(
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {},
+    viewModel: ChangePasswordViewModel = viewModel(
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+            LocalContext.current.applicationContext as android.app.Application
+        )
+    )
 ) {
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
@@ -30,6 +41,29 @@ fun ChangePasswordScreen(
     var showCurrentPassword by remember { mutableStateOf(false) }
     var showNewPassword by remember { mutableStateOf(false) }
     var showConfirmPassword by remember { mutableStateOf(false) }
+    
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+    val isSuccess by viewModel.isSuccess.collectAsState()
+    
+    // Clear error when user starts typing
+    LaunchedEffect(currentPassword, newPassword, confirmPassword) {
+        if (errorMessage != null) {
+            viewModel.clearError()
+        }
+    }
+    
+    // Show success dialog and navigate back
+    LaunchedEffect(isSuccess) {
+        if (isSuccess) {
+            // Reset form
+            currentPassword = ""
+            newPassword = ""
+            confirmPassword = ""
+            viewModel.clearSuccess()
+            onBackClick()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -78,7 +112,7 @@ fun ChangePasswordScreen(
                 trailingIcon = {
                     IconButton(onClick = { showCurrentPassword = !showCurrentPassword }) {
                         Icon(
-                            Icons.Default.Lock,
+                            if (showCurrentPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                             contentDescription = if (showCurrentPassword) "Hide password" else "Show password",
                             tint = GrayDark
                         )
@@ -104,7 +138,7 @@ fun ChangePasswordScreen(
                 trailingIcon = {
                     IconButton(onClick = { showNewPassword = !showNewPassword }) {
                         Icon(
-                            Icons.Default.Lock,
+                            if (showNewPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                             contentDescription = if (showNewPassword) "Hide password" else "Show password",
                             tint = GrayDark
                         )
@@ -130,7 +164,7 @@ fun ChangePasswordScreen(
                 trailingIcon = {
                     IconButton(onClick = { showConfirmPassword = !showConfirmPassword }) {
                         Icon(
-                            Icons.Default.Lock,
+                            if (showConfirmPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                             contentDescription = if (showConfirmPassword) "Hide password" else "Show password",
                             tint = GrayDark
                         )
@@ -145,14 +179,39 @@ fun ChangePasswordScreen(
                 shape = RoundedCornerShape(8.dp)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            // Error Message
+            errorMessage?.let { error ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = RedPrimary.copy(alpha = 0.1f)
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = error,
+                        color = RedPrimary,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Tombol Simpan
             Button(
                 onClick = {
-                    // TODO: Handle change password
-                    onBackClick()
+                    viewModel.changePassword(
+                        currentPassword = currentPassword,
+                        newPassword = newPassword,
+                        confirmPassword = confirmPassword,
+                        onSuccess = {
+                            // Success handled by LaunchedEffect
+                        }
+                    )
                 },
+                enabled = !isLoading && currentPassword.isNotBlank() && newPassword.isNotBlank() && confirmPassword.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = BluePrimary
                 ),
@@ -161,12 +220,20 @@ fun ChangePasswordScreen(
                     .fillMaxWidth()
                     .height(50.dp)
             ) {
-                Text(
-                    "Simpan",
-                    color = White,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        "Simpan",
+                        color = White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp
+                    )
+                }
             }
         }
     }

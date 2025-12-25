@@ -1,5 +1,9 @@
 package com.example.projektbptb.screen
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,15 +22,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.canhub.cropper.CropImageContract
+import com.canhub.cropper.CropImageContractOptions
+import com.canhub.cropper.CropImageOptions
+import com.canhub.cropper.CropImageView
 import kotlinx.coroutines.delay
 import com.example.projektbptb.R
 import com.example.projektbptb.ui.theme.*
 import com.example.projektbptb.viewmodel.ProfileViewModel
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,6 +48,7 @@ fun AddProfileScreen(
     onBackClick: () -> Unit = {},
     onSaveClick: (String, String, String, String) -> Unit = { _, _, _, _ -> }
 ) {
+    val context = LocalContext.current
     val currentUser by viewModel.user
     val isLoading by viewModel.isLoading
     val errorMessage by viewModel.errorMessage
@@ -54,6 +68,96 @@ fun AddProfileScreen(
     var email by remember(currentUser?.email) { mutableStateOf(currentUser?.email ?: "") }
     var selectedGender by remember(currentUser?.gender) { mutableStateOf(currentUser?.gender ?: "Laki-laki") }
     var updateTriggered by remember { mutableStateOf(false) }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var croppedImageFile by remember { mutableStateOf<File?>(null) }
+    var showErrorDialog by remember { mutableStateOf(false) }
+    var errorDialogMessage by remember { mutableStateOf("") }
+    
+    // Image cropper launcher - crop to circle
+    val imageCropLauncher = rememberLauncherForActivityResult(CropImageContract()) { result ->
+        try {
+            if (result.isSuccessful) {
+                result.uriContent?.let { uri ->
+                    // Convert URI to File
+                    try {
+                        val inputStream = context.contentResolver.openInputStream(uri)
+                        if (inputStream != null) {
+                            val file = File(context.cacheDir, "cropped_profile_${System.currentTimeMillis()}.jpg")
+                            inputStream.use { input ->
+                                file.outputStream().use { output ->
+                                    input.copyTo(output)
+                                }
+                            }
+                            croppedImageFile = file
+                            selectedImageUri = uri
+                            android.util.Log.d("AddProfile", "Image cropped successfully: ${file.absolutePath}")
+                        } else {
+                            errorDialogMessage = "Gagal membuka gambar"
+                            showErrorDialog = true
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("AddProfile", "Error converting URI to File", e)
+                        errorDialogMessage = "Gagal memproses gambar: ${e.message}"
+                        showErrorDialog = true
+                    }
+                }
+            } else if (result.error != null) {
+                android.util.Log.e("AddProfile", "Crop error: ${result.error}")
+                errorDialogMessage = "Gagal memotong gambar: ${result.error?.message}"
+                showErrorDialog = true
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("AddProfile", "Crop launcher error", e)
+            errorDialogMessage = "Terjadi kesalahan: ${e.message}"
+            showErrorDialog = true
+        }
+    }
+    
+    // Image picker launcher
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        try {
+            uri?.let {
+                android.util.Log.d("AddProfile", "Image selected: $it")
+                // Launch cropper with circle crop shape
+                try {
+                    val cropOptions = CropImageContractOptions(it, CropImageOptions().apply {
+                        cropShape = CropImageView.CropShape.OVAL
+                        aspectRatioX = 1
+                        aspectRatioY = 1
+                        fixAspectRatio = true
+                        guidelines = CropImageView.Guidelines.ON
+                        outputCompressFormat = android.graphics.Bitmap.CompressFormat.JPEG
+                        outputCompressQuality = 80
+                    })
+                    imageCropLauncher.launch(cropOptions)
+                } catch (e: Exception) {
+                    android.util.Log.e("AddProfile", "Error launching cropper", e)
+                    errorDialogMessage = "Gagal membuka editor gambar: ${e.message}"
+                    showErrorDialog = true
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("AddProfile", "Image picker error", e)
+            errorDialogMessage = "Gagal memilih gambar: ${e.message}"
+            showErrorDialog = true
+        }
+    }
+    
+    // Error dialog
+    if (showErrorDialog) {
+        AlertDialog(
+            onDismissRequest = { showErrorDialog = false },
+            title = { Text("Error") },
+            text = { Text(errorDialogMessage) },
+            confirmButton = {
+                Button(onClick = { showErrorDialog = false }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -101,18 +205,58 @@ fun AddProfileScreen(
                         modifier = Modifier
                             .size(120.dp)
                             .clip(CircleShape)
-                            .background(BlueLight),
+                            .background(BlueLight)
+                            .border(3.dp, BluePrimary, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.logo),
-                            contentDescription = "Profile",
-                            modifier = Modifier.size(100.dp)
-                        )
+                        when {
+                            // Show cropped image if available
+                            selectedImageUri != null -> {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(selectedImageUri)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = "Profile Image",
+                                    modifier = Modifier
+                                        .size(120.dp)
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            // Show existing profile image from server
+                            currentUser?.profileImageUrl != null -> {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(currentUser?.profileImageUrl)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = "Profile Image",
+                                    modifier = Modifier
+                                        .size(120.dp)
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop,
+                                    error = painterResource(id = R.drawable.logo)
+                                )
+                            }
+                            // Show placeholder
+                            else -> {
+                                Text(
+                                    text = currentUser?.name?.firstOrNull()?.toString() ?: "U",
+                                    fontSize = 48.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BluePrimary
+                                )
+                            }
+                        }
                     }
                     // Camera Icon Overlay
                     IconButton(
-                        onClick = { /* TODO: Handle image picker */ },
+                        onClick = {
+                            imagePickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .size(36.dp)
@@ -129,11 +273,15 @@ fun AddProfileScreen(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Edit",
+                    text = "Pilih Foto",
                     color = BluePrimary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
-                    modifier = Modifier.clickable { /* TODO: Handle edit */ }
+                    modifier = Modifier.clickable {
+                        imagePickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    }
                 )
             }
 
@@ -308,7 +456,8 @@ fun AddProfileScreen(
                         username = username ?: "",
                         email = email,
                         phoneNumber = phoneNumber ?: "",
-                        gender = selectedGender ?: "Laki-laki"
+                        gender = selectedGender ?: "Laki-laki",
+                        imageFile = croppedImageFile
                     )
                 },
                 enabled = !isLoading && name.isNotBlank(),

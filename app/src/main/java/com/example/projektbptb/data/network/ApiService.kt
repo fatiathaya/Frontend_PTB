@@ -26,6 +26,39 @@ interface AuthApiService {
         @Header("Authorization") token: String,
         @Body user: Map<String, String>
     ): Response<ApiResponse<UserResponse>>
+    
+    @Multipart
+    @POST("user")
+    suspend fun updateUserWithImage(
+        @Header("Authorization") token: String,
+        @Part("_method") method: RequestBody,
+        @Part("name") name: RequestBody?,
+        @Part("username") username: RequestBody?,
+        @Part("email") email: RequestBody?,
+        @Part("phone_number") phoneNumber: RequestBody?,
+        @Part("gender") gender: RequestBody?,
+        @Part profileImage: MultipartBody.Part?
+    ): Response<ApiResponse<UserResponse>>
+    
+    @DELETE("user/profile-image")
+    suspend fun deleteProfileImage(@Header("Authorization") token: String): Response<ApiResponse<UserResponse>>
+    
+    @POST("user/change-password")
+    suspend fun changePassword(
+        @Header("Authorization") token: String,
+        @Body request: ChangePasswordRequest
+    ): Response<ApiResponse<Unit>>
+    
+    @POST("user/fcm-token")
+    suspend fun saveFcmToken(
+        @Header("Authorization") token: String,
+        @Body request: Map<String, String>
+    ): Response<ApiResponse<Unit>>
+    
+    @GET("users/{userId}")
+    suspend fun getUserProfile(
+        @Path("userId") userId: Int
+    ): Response<ApiResponse<UserProfileResponse>>
 }
 
 /**
@@ -36,7 +69,8 @@ interface ProductApiService {
     suspend fun getProducts(
         @Header("Authorization") token: String? = null,
         @Query("category") category: String? = null,
-        @Query("search") search: String? = null
+        @Query("search") search: String? = null,
+        @Query("user_id") userId: Int? = null
     ): Response<ApiResponse<List<ProductResponse>>>
     
     @GET("products/{id}")
@@ -53,9 +87,14 @@ interface ProductApiService {
         @Part("category") category: RequestBody,
         @Part("condition") condition: RequestBody,
         @Part("description") description: RequestBody?,
+        @Part("address") address: RequestBody?,
+        @Part("latitude") latitude: RequestBody?,
+        @Part("longitude") longitude: RequestBody?,
         @Part("price") price: RequestBody,
         @Part("whatsapp_number") whatsappNumber: RequestBody,
-        @Part image: MultipartBody.Part?
+        @Part image: MultipartBody.Part?,
+        // New multi-image support (preferred)
+        @Part images: Array<MultipartBody.Part>? = null
     ): Response<ApiResponse<ProductResponse>>
     
     @PUT("products/{id}")
@@ -75,9 +114,14 @@ interface ProductApiService {
         @Part("category") category: RequestBody,
         @Part("condition") condition: RequestBody?,
         @Part("description") description: RequestBody?,
+        @Part("address") address: RequestBody?,
+        @Part("latitude") latitude: RequestBody?,
+        @Part("longitude") longitude: RequestBody?,
         @Part("price") price: RequestBody,
         @Part("whatsapp_number") whatsappNumber: RequestBody?,
-        @Part image: MultipartBody.Part?
+        @Part image: MultipartBody.Part?,
+        @Part images: Array<MultipartBody.Part>?,
+        @Part deleteImageIds: Array<MultipartBody.Part>?
     ): Response<ApiResponse<ProductResponse>>
     
     @DELETE("products/{id}")
@@ -101,6 +145,13 @@ interface ProductApiService {
     suspend fun getMyProducts(
         @Header("Authorization") token: String
     ): Response<ApiResponse<List<ProductResponse>>>
+    
+    @DELETE("products/{productId}/images/{imageId}")
+    suspend fun deleteProductImage(
+        @Header("Authorization") token: String,
+        @Path("productId") productId: Int,
+        @Path("imageId") imageId: Int
+    ): Response<ApiResponse<Map<String, Any>>>
 }
 
 /**
@@ -135,6 +186,90 @@ interface AddressApiService {
     suspend fun deleteAddress(
         @Header("Authorization") token: String,
         @Path("id") id: Int
+    ): Response<ApiResponse<Unit>>
+}
+
+/**
+ * API Service untuk Search History
+ */
+interface SearchHistoryApiService {
+    @GET("search-history")
+    suspend fun getSearchHistory(
+        @Header("Authorization") token: String
+    ): Response<ApiResponse<List<SearchHistoryResponse>>>
+    
+    @POST("search-history")
+    suspend fun saveSearchHistory(
+        @Header("Authorization") token: String,
+        @Body query: Map<String, String>
+    ): Response<ApiResponse<SearchHistoryResponse>>
+    
+    @DELETE("search-history/{id}")
+    suspend fun deleteSearchHistory(
+        @Header("Authorization") token: String,
+        @Path("id") id: Int
+    ): Response<ApiResponse<Unit>>
+    
+    @HTTP(method = "DELETE", path = "search-history", hasBody = false)
+    suspend fun clearSearchHistory(
+        @Header("Authorization") token: String
+    ): Response<ApiResponse<Unit>>
+}
+
+/**
+ * API Service untuk Comments
+ */
+interface CommentApiService {
+    @GET("products/{productId}/comments")
+    suspend fun getComments(
+        @Path("productId") productId: Int,
+        @Header("Authorization") token: String? = null
+    ): Response<ApiResponse<List<CommentResponse>>>
+    
+    @POST("products/{productId}/comments")
+    suspend fun createComment(
+        @Path("productId") productId: Int,
+        @Header("Authorization") token: String,
+        @Body comment: Map<String, String> // Can include "comment" and optional "parent_comment_id"
+    ): Response<ApiResponse<CommentResponse>>
+    
+    @PUT("comments/{id}")
+    suspend fun updateComment(
+        @Path("id") id: Int,
+        @Header("Authorization") token: String,
+        @Body comment: Map<String, String>
+    ): Response<ApiResponse<CommentResponse>>
+    
+    @DELETE("comments/{id}")
+    suspend fun deleteComment(
+        @Path("id") id: Int,
+        @Header("Authorization") token: String
+    ): Response<ApiResponse<Unit>>
+}
+
+/**
+ * API Service untuk Notifications
+ */
+interface NotificationApiService {
+    @GET("notifications")
+    suspend fun getNotifications(
+        @Header("Authorization") token: String
+    ): Response<ApiResponse<List<NotificationResponse>>>
+    
+    @GET("notifications/unread-count")
+    suspend fun getUnreadCount(
+        @Header("Authorization") token: String
+    ): Response<ApiResponse<UnreadCountResponse>>
+    
+    @PUT("notifications/{id}/read")
+    suspend fun markAsRead(
+        @Header("Authorization") token: String,
+        @Path("id") id: Int
+    ): Response<ApiResponse<Unit>>
+    
+    @PUT("notifications/read-all")
+    suspend fun markAllAsRead(
+        @Header("Authorization") token: String
     ): Response<ApiResponse<Unit>>
 }
 

@@ -36,5 +36,8 @@ object NetworkModule {
     val authApiService: AuthApiService = retrofit.create(AuthApiService::class.java)
     val productApiService: ProductApiService = retrofit.create(ProductApiService::class.java)
     val addressApiService: AddressApiService = retrofit.create(AddressApiService::class.java)
+    val searchHistoryApiService: SearchHistoryApiService = retrofit.create(SearchHistoryApiService::class.java)
+    val commentApiService: CommentApiService = retrofit.create(CommentApiService::class.java)
+    val notificationApiService: NotificationApiService = retrofit.create(NotificationApiService::class.java)
 }
 

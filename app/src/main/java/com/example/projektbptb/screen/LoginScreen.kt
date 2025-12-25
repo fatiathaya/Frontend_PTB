@@ -168,17 +168,6 @@ fun LoginScreen(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            
-            // Error message
-            errorMessage?.let { error ->
-                Text(
-                    text = error,
-                    color = Color.Red,
-                    fontSize = 12.sp,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
 
             Button(
                 onClick = {
@@ -216,6 +205,41 @@ fun LoginScreen(
                 )
             }
         }
+    }
+    
+    // Alert dialog untuk menampilkan error (termasuk sandi salah)
+    errorMessage?.let { error ->
+        AlertDialog(
+            onDismissRequest = {
+                viewModel.errorMessage.value = null
+            },
+            title = {
+                Text(
+                    text = "Login Gagal",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Text(
+                    text = error,
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.errorMessage.value = null
+                    }
+                ) {
+                    Text(
+                        "OK",
+                        color = BluePrimary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        )
     }
 }
 

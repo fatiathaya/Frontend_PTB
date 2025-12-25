@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -185,16 +186,7 @@ fun AnimatedWishlistItem(
         isVisible = true
     }
     
-    // Animasi scale untuk button
-    val viewButtonScale by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "button_scale"
-    )
-    
+    // Animasi scale untuk delete button
     val deleteButtonScale by animateFloatAsState(
         targetValue = if (isDeleting) 0.8f else 1f,
         animationSpec = spring(
@@ -238,7 +230,8 @@ fun AnimatedWishlistItem(
                     shape = RoundedCornerShape(16.dp),
                     spotColor = Color.Black.copy(alpha = 0.1f)
                 )
-                .clip(RoundedCornerShape(16.dp)),
+                .clip(RoundedCornerShape(16.dp))
+                .clickable { onViewClick() }, // Card dapat diklik untuk masuk ke detail
             colors = CardDefaults.cardColors(containerColor = White),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
@@ -246,12 +239,12 @@ fun AnimatedWishlistItem(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                // Product Image dengan animasi
+                // Product Image dengan animasi - ukuran lebih kecil dan rapi
                 Box(
                     modifier = Modifier
-                        .size(120.dp)
+                        .size(100.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(GrayLight)
                 ) {
@@ -283,12 +276,18 @@ fun AnimatedWishlistItem(
 
                 Spacer(modifier = Modifier.width(16.dp))
 
-                // Product Info
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                // Product Info - layout rapi dengan delete button di tengah vertikal
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight() // Mengisi tinggi yang sama dengan gambar
                 ) {
-                    // Product Name
+                    // Konten utama: Nama, Category, Price
+                Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                        // Bagian atas: Nama produk
                     Text(
                         text = product.name,
                         fontSize = 16.sp,
@@ -299,11 +298,14 @@ fun AnimatedWishlistItem(
                         lineHeight = 20.sp
                     )
                     
+                        // Bagian tengah: Category dan Price
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
                     // Category Badge
                     Surface(
                         color = BlueLight,
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.padding(vertical = 2.dp)
+                                shape = RoundedCornerShape(6.dp)
                     ) {
                         Text(
                             text = product.category,
@@ -314,69 +316,45 @@ fun AnimatedWishlistItem(
                         )
                     }
                     
-                    // Price
+                            // Price - dengan lineHeight untuk mencegah terpotong
                     Text(
                         text = if (product.price.startsWith("Rp")) product.price else "Rp ${product.price}",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = BluePrimary
-                    )
-                    
-                    Spacer(modifier = Modifier.height(4.dp))
-                    
-                    // View Button dengan animasi
-                    Button(
-                        onClick = {
-                            onViewClick()
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = BluePrimary
-                        ),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(40.dp)
-                            .scale(viewButtonScale)
-                            .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onPress = {
-                                        // Scale animation on press
-                                    }
-                                )
-                            },
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = "Lihat Detail",
-                            color = White,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
+                                color = BluePrimary,
+                                lineHeight = 22.sp, // Mencegah teks terpotong
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.width(8.dp))
                 
-                // Delete Icon dengan animasi
-                IconButton(
-                    onClick = {
-                        isDeleting = true
-                        onDeleteClick()
-                    },
+                    // Delete Icon dengan animasi - di kanan tengah (vertically centered)
+                    Box(
                     modifier = Modifier
-                        .size(48.dp)
+                            .align(Alignment.CenterEnd)
+                            .size(36.dp)
                         .scale(deleteButtonScale)
                         .background(
                             color = RedPrimary.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(8.dp)
                         )
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) {
+                                isDeleting = true
+                                onDeleteClick()
+                            },
+                        contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = "Hapus dari wishlist",
                         tint = RedPrimary,
-                        modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(18.dp)
                     )
+                    }
                 }
             }
         }

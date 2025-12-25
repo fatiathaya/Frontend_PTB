@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,6 +37,9 @@ import com.example.projektbptb.data.model.Product
 import com.example.projektbptb.ui.theme.BlueLight
 import com.example.projektbptb.ui.theme.BluePrimary
 import com.example.projektbptb.ui.theme.GrayDark
+import com.example.projektbptb.ui.theme.RedPrimary
+import com.example.projektbptb.ui.theme.Black
+import com.example.projektbptb.ui.theme.White
 import com.example.projektbptb.viewmodel.HomeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,13 +49,16 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToHome: () -> Unit = {},
     onNavigateToSell: () -> Unit = {},
-    onNavigateToProductDetail: () -> Unit = {},
+    onNavigateToProductDetail: (Int) -> Unit = {},
     onNavigateToWishlist: () -> Unit = {},
+    onNavigateToNotification: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {}
 ) {
 
     val selectedCategory by viewModel.selectedCategory
     val products = viewModel.products
+    val showAlert by viewModel.showAlert
+    val alertMessage by viewModel.alertMessage
     
     // Pastikan data ter-sync saat kembali ke HomeScreen
     // Gunakan DisposableEffect untuk memastikan sync setiap kali screen menjadi visible
@@ -61,14 +69,49 @@ fun HomeScreen(
         viewModel.loadFavorites()
         onDispose { }
     }
+    
+    // Alert Dialog untuk menampilkan pesan error
+    if (showAlert && alertMessage != null) {
+        AlertDialog(
+            onDismissRequest = {
+                viewModel.showAlert.value = false
+                viewModel.alertMessage.value = null
+            },
+            title = {
+                Text(
+                    text = "Peringatan",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Text(
+                    text = alertMessage ?: "",
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.showAlert.value = false
+                        viewModel.alertMessage.value = null
+                    }
+                ) {
+                    Text("OK", color = BluePrimary)
+                }
+            }
+        )
+    }
 
     Scaffold(
         bottomBar = { 
             BottomNavigationBar(
                 currentRoute = "home",
+                isProfileComplete = viewModel.isProfileComplete(),
                 onNavigateToHome = onNavigateToHome,
                 onNavigateToSell = onNavigateToSell,
-                onNavigateToSettings = onNavigateToSettings
+                onNavigateToSettings = onNavigateToSettings,
+                onNavigateToCompleteProfile = onNavigateToSettings
             )
         }
     ) { innerPadding ->
@@ -110,8 +153,23 @@ fun HomeScreen(
                     }
                 }
                 Spacer(modifier = Modifier.width(8.dp))
+                // Icon Notifikasi
+                IconButton(onClick = onNavigateToNotification) {
+                    Icon(
+                        Icons.Default.Notifications,
+                        contentDescription = "Notifikasi",
+                        tint = BluePrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                // Icon Wishlist
                 IconButton(onClick = onNavigateToWishlist) {
-                    Icon(Icons.Default.FavoriteBorder, contentDescription = "Wishlist", tint = BluePrimary)
+                    Icon(
+                        Icons.Default.FavoriteBorder,
+                        contentDescription = "Wishlist",
+                        tint = BluePrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
 
@@ -163,7 +221,9 @@ fun HomeScreen(
                         product = product,
                         onFavoriteClick = { viewModel.toggleFavorite(product) },
                         onProductClick = {
-                            onNavigateToProductDetail()
+                            product.id.toIntOrNull()?.let { productId ->
+                                onNavigateToProductDetail(productId)
+                            }
                         }
                     )
                 }
@@ -181,6 +241,10 @@ fun ProductCard(
     // Pastikan selalu membaca nilai terbaru dari product.isFavorite
     // Gunakan key untuk memastikan re-composition ketika product berubah
     val isFavorite = remember(product.id, product.isFavorite) { product.isFavorite }
+    
+    // Tentukan apakah produk milik user sendiri
+    // Backend sudah mengirim isOwnProduct dengan benar
+    val isOwnProduct = product.isOwnProduct
     
     Card(
         modifier = Modifier
@@ -230,21 +294,23 @@ fun ProductCard(
                             .clip(RoundedCornerShape(8.dp))
                     )
                 }
-                // Icon dan warna harus selalu sinkron dengan isFavorite
-                IconButton(
-                    onClick = onFavoriteClick,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .background(Color.White.copy(alpha = 0.9f), CircleShape)
-                        .size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = if (isFavorite) "Hapus dari wishlist" else "Tambah ke wishlist",
-                        tint = if (isFavorite) Color.Red else Color.Gray,
-                        modifier = Modifier.size(18.dp)
-                    )
+                // Icon dan warna harus selalu sinkron dengan isFavorite - hanya tampil jika bukan produk milik user sendiri
+                if (!isOwnProduct) {
+                    IconButton(
+                        onClick = onFavoriteClick,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .background(Color.White.copy(alpha = 0.9f), CircleShape)
+                            .size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = if (isFavorite) "Hapus dari wishlist" else "Tambah ke wishlist",
+                            tint = if (isFavorite) Color.Red else Color.Gray,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 
@@ -271,8 +337,4 @@ fun ProductCard(
         }
     }
 }
-@Preview(showBackground = true)
-@Composable
-fun PreviewHomeScreen() {
-    HomeScreen()
-}
+

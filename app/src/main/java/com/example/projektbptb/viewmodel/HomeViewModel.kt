@@ -14,18 +14,48 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val productRepository = ProductRepository()
     private val authRepository = AuthRepository(application)
     
-    val categories = listOf("All", "Baju", "Perabotan", "Elektronik", "Kulia", "Sepatu")
+    val categories = listOf("All", "Pakaian", "Perabotan", "Elektronik", "Perlengkapan Kuliah", "Sepatu")
     val selectedCategory = mutableStateOf("All")
     
     val products = mutableStateListOf<Product>()
+    // Dedicated list for search results to prevent flashing the home product list.
+    val searchResults = mutableStateListOf<Product>()
     val favoriteProducts = mutableStateListOf<Product>()
     val isLoading = mutableStateOf(false)
+    val isSearching = mutableStateOf(false)
     val isLoadingFavorites = mutableStateOf(false)
     val errorMessage = mutableStateOf<String?>(null)
+    val showAlert = mutableStateOf(false)
+    val alertMessage = mutableStateOf<String?>(null)
+    val currentUser = mutableStateOf<com.example.projektbptb.data.model.User?>(null)
     
     init {
         loadProducts()
         loadFavorites()
+        loadCurrentUser()
+    }
+    
+    private fun loadCurrentUser() {
+        viewModelScope.launch {
+            authRepository.getUser()
+                .onSuccess { userResponse ->
+                    currentUser.value = com.example.projektbptb.data.model.User(
+                        id = userResponse.id,
+                        name = userResponse.name,
+                        username = userResponse.username,
+                        email = userResponse.email,
+                        phoneNumber = userResponse.phone_number,
+                        gender = userResponse.gender,
+                        profileImageUrl = userResponse.profile_image
+                    )
+                }
+        }
+    }
+    
+    fun isProfileComplete(): Boolean {
+        return currentUser.value?.let { user ->
+            !user.email.isNullOrBlank() && !user.phoneNumber.isNullOrBlank()
+        } ?: false
     }
     
     fun loadProducts(category: String? = null, search: String? = null) {
@@ -36,7 +66,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val token = authRepository.getToken()
             val categoryFilter = if (category == "All" || category == null) null else category
             
-            productRepository.getProducts(categoryFilter, search, token)
+            productRepository.getProducts(category = categoryFilter, search = search, token = token)
                 .onSuccess { productList ->
                     products.clear()
                     products.addAll(productList)
@@ -50,6 +80,51 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 .onFailure { exception ->
                     errorMessage.value = exception.message ?: "Gagal memuat produk"
                     isLoading.value = false
+                }
+        }
+    }
+
+    /**
+     * Search products by query (name/category) without mutating the home product list.
+     * This avoids a brief UI flash of the previous/all products while search is loading.
+     */
+    fun searchProducts(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) return
+
+        isSearching.value = true
+        errorMessage.value = null
+        // Clear immediately so UI never shows stale results.
+        searchResults.clear()
+
+        viewModelScope.launch {
+            val token = authRepository.getToken()
+            productRepository.getProducts(category = null, search = trimmed, token = token)
+                .onSuccess { productList ->
+                    searchResults.clear()
+                    searchResults.addAll(productList)
+
+                    // Sync favorite status for search results too.
+                    if (favoriteProducts.isNotEmpty()) {
+                        val favoriteIds = favoriteProducts.map { it.id }.toSet()
+                        val updates = mutableListOf<Pair<Int, Product>>()
+                        searchResults.forEachIndexed { index, product ->
+                            val shouldBeFavorite = favoriteIds.contains(product.id)
+                            if (product.isFavorite != shouldBeFavorite) {
+                                updates.add(index to product.copy(isFavorite = shouldBeFavorite))
+                            }
+                        }
+                        updates.sortedByDescending { it.first }.forEach { (index, updated) ->
+                            searchResults.removeAt(index)
+                            searchResults.add(index, updated)
+                        }
+                    }
+
+                    isSearching.value = false
+                }
+                .onFailure { exception ->
+                    errorMessage.value = exception.message ?: "Gagal mencari produk"
+                    isSearching.value = false
                 }
         }
     }
@@ -139,7 +214,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     loadFavorites()
                 }
                 .onFailure { exception ->
-                    errorMessage.value = exception.message ?: "Gagal mengubah favorite"
+                    val message = exception.message ?: "Gagal mengubah favorite"
+                    errorMessage.value = message
+                    
+                    // Tampilkan alert khusus jika user mencoba wishlist produk sendiri
+                    if (message.contains("tidak bisa", ignoreCase = true) || 
+                        message.contains("produk sendiri", ignoreCase = true)) {
+                        alertMessage.value = "Tidak bisa wishlist produk sendiri"
+                        showAlert.value = true
+                    }
                 }
         }
     }

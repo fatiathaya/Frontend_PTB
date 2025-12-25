@@ -6,6 +6,11 @@ import android.util.Log
 import com.example.projektbptb.data.model.User
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 
 class AuthRepository(private val context: Context) {
     private val authApiService = NetworkModule.authApiService
@@ -61,10 +66,10 @@ class AuthRepository(private val context: Context) {
     }
     
     suspend fun register(
-        name: String,
         email: String,
         password: String,
         passwordConfirmation: String,
+        name: String? = null,
         username: String? = null,
         phoneNumber: String? = null,
         gender: String? = null
@@ -78,7 +83,8 @@ class AuthRepository(private val context: Context) {
                 
                 if (response.isSuccessful && responseBody?.success == true && responseBody.data != null) {
                     val authResponse = responseBody.data!!
-                    saveAuthData(authResponse)
+                    // Disable auto-login after register
+                    // saveAuthData(authResponse)
                     Result.success(authResponse)
                 } else {
                     // Get detailed error message
@@ -158,6 +164,70 @@ class AuthRepository(private val context: Context) {
         }
     }
     
+    suspend fun updateUserWithImage(
+        user: User,
+        imageFile: File?
+    ): Result<UserResponse> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val token = getToken() ?: return@withContext Result.failure(Exception("Not authenticated"))
+                
+                // Create multipart image part if file exists
+                val imagePart: MultipartBody.Part? = imageFile?.let { file ->
+                    val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
+                    MultipartBody.Part.createFormData("profile_image", file.name, requestFile)
+                }
+                
+                // Create RequestBody for string fields
+                val nameBody = user.name.toRequestBody("text/plain".toMediaTypeOrNull())
+                val usernameBody = (user.username ?: "").toRequestBody("text/plain".toMediaTypeOrNull())
+                val emailBody = user.email.toRequestBody("text/plain".toMediaTypeOrNull())
+                val phoneBody = (user.phoneNumber ?: "").toRequestBody("text/plain".toMediaTypeOrNull())
+                val genderBody = (user.gender ?: "").toRequestBody("text/plain".toMediaTypeOrNull())
+                val methodBody = "PUT".toRequestBody("text/plain".toMediaTypeOrNull())
+                
+                val response = authApiService.updateUserWithImage(
+                    token = "Bearer $token",
+                    method = methodBody,
+                    name = nameBody,
+                    username = usernameBody,
+                    email = emailBody,
+                    phoneNumber = phoneBody,
+                    gender = genderBody,
+                    profileImage = imagePart
+                )
+                
+                val responseBody = response.body()
+                
+                if (response.isSuccessful && responseBody?.success == true && responseBody.data != null) {
+                    Result.success(responseBody.data!!)
+                } else {
+                    Result.failure(Exception(responseBody?.message ?: "Failed to update user"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+    
+    suspend fun deleteProfileImage(): Result<UserResponse> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val token = getToken() ?: return@withContext Result.failure(Exception("Not authenticated"))
+                val response = authApiService.deleteProfileImage("Bearer $token")
+                val responseBody = response.body()
+                
+                if (response.isSuccessful && responseBody?.success == true && responseBody.data != null) {
+                    Result.success(responseBody.data!!)
+                } else {
+                    Result.failure(Exception(responseBody?.message ?: "Failed to delete profile image"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+    
     suspend fun logout(): Result<Unit> {
         return withContext(Dispatchers.IO) {
             try {
@@ -176,7 +246,56 @@ class AuthRepository(private val context: Context) {
     
     fun getToken(): String? = prefs.getString(KEY_TOKEN, null)
     
+    suspend fun getUserProfile(userId: Int): Result<com.example.projektbptb.data.network.UserProfileResponse> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = authApiService.getUserProfile(userId)
+                val responseBody = response.body()
+
+                if (response.isSuccessful && responseBody?.success == true && responseBody.data != null) {
+                    Result.success(responseBody.data!!)
+                } else {
+                    val errorMessage = responseBody?.message
+                        ?: response.errorBody()?.string()?.let {
+                            try {
+                                val json = org.json.JSONObject(it)
+                                json.optString("message", "Failed to get user profile")
+                            } catch (e: Exception) {
+                                it
+                            }
+                        } ?: "Failed to get user profile"
+                    Result.failure(Exception(errorMessage))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+    
+    fun getUserId(): Int? {
+        val userId = prefs.getInt(KEY_USER_ID, -1)
+        return if (userId != -1) userId else null
+    }
+    
     fun isLoggedIn(): Boolean = getToken() != null
+    
+    suspend fun saveFcmToken(fcmToken: String): Result<Unit> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val token = getToken() ?: return@withContext Result.failure(Exception("Not authenticated"))
+                val response = authApiService.saveFcmToken("Bearer $token", mapOf("fcm_token" to fcmToken))
+                val responseBody = response.body()
+                
+                if (response.isSuccessful && responseBody?.success == true) {
+                    Result.success(Unit)
+                } else {
+                    Result.failure(Exception(responseBody?.message ?: "Failed to save FCM token"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
     
     private fun saveAuthData(authResponse: AuthResponse) {
         try {

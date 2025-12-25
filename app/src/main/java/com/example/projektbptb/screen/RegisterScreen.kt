@@ -21,6 +21,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import com.example.projektbptb.ui.theme.BlueLight
 import com.example.projektbptb.ui.theme.BluePrimary
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun RegisterScreen(
@@ -28,20 +29,18 @@ fun RegisterScreen(
     onLoginClick: () -> Unit = {},
     viewModel: com.example.projektbptb.viewmodel.LoginViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
-    var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
-    var phoneNumber by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-    var selectedGender by remember { mutableStateOf("Laki-laki") }
     
     val isLoading by viewModel.isLoading
     val errorMessage by viewModel.errorMessage
-    val isLoginSuccess by viewModel.isLoginSuccess
+    val isRegisterSuccess by viewModel.isRegisterSuccess
+    val context = LocalContext.current
     
-    LaunchedEffect(isLoginSuccess) {
-        if (isLoginSuccess) {
+    LaunchedEffect(isRegisterSuccess) {
+        if (isRegisterSuccess) {
+            android.widget.Toast.makeText(context, "Registrasi berhasil, silakan login", android.widget.Toast.LENGTH_LONG).show()
             onRegisterClick()
         }
     }
@@ -51,7 +50,7 @@ fun RegisterScreen(
             .fillMaxSize()
             .background(BlueLight)
             .padding(vertical = 16.dp),
-        contentAlignment = Alignment.TopCenter
+        contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
@@ -77,23 +76,6 @@ fun RegisterScreen(
             )
             Spacer(modifier = Modifier.height(32.dp))
             
-            // Name
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Nama") },
-                modifier = Modifier.fillMaxWidth(),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFFF3F6FC),
-                    unfocusedContainerColor = Color(0xFFF3F6FC),
-                    focusedIndicatorColor = BluePrimary,
-                    unfocusedIndicatorColor = Color(0xFFB0C4DE)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             // Email
             OutlinedTextField(
                 value = email,
@@ -111,89 +93,6 @@ fun RegisterScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Username
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it },
-                label = { Text("Username") },
-                modifier = Modifier.fillMaxWidth(),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFFF3F6FC),
-                    unfocusedContainerColor = Color(0xFFF3F6FC),
-                    focusedIndicatorColor = BluePrimary,
-                    unfocusedIndicatorColor = Color(0xFFB0C4DE)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Phone Number
-            OutlinedTextField(
-                value = phoneNumber,
-                onValueChange = { phoneNumber = it },
-                label = { Text("No HP") },
-                modifier = Modifier.fillMaxWidth(),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFFF3F6FC),
-                    unfocusedContainerColor = Color(0xFFF3F6FC),
-                    focusedIndicatorColor = BluePrimary,
-                    unfocusedIndicatorColor = Color(0xFFB0C4DE)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Gender
-            Column {
-                Text(
-                    text = "Jenis Kelamin",
-                    fontSize = 14.sp,
-                    color = Color.Black,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { selectedGender = "Laki-laki" },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = selectedGender == "Laki-laki",
-                            onClick = { selectedGender = "Laki-laki" },
-                            colors = RadioButtonDefaults.colors(
-                                selectedColor = BluePrimary
-                            )
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Laki-laki", fontSize = 14.sp)
-                    }
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { selectedGender = "Perempuan" },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = selectedGender == "Perempuan",
-                            onClick = { selectedGender = "Perempuan" },
-                            colors = RadioButtonDefaults.colors(
-                                selectedColor = BluePrimary
-                            )
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Perempuan", fontSize = 14.sp)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             // Password
             OutlinedTextField(
                 value = password,
@@ -243,13 +142,9 @@ fun RegisterScreen(
             Button(
                 onClick = {
                     viewModel.register(
-                        name = name,
                         email = email,
                         password = password,
-                        confirmPassword = confirmPassword,
-                        username = username.ifBlank { null },
-                        phoneNumber = phoneNumber.ifBlank { null },
-                        gender = selectedGender
+                        confirmPassword = confirmPassword
                     ) {
                         // onSuccess handled by LaunchedEffect
                     }

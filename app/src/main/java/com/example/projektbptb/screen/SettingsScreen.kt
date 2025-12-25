@@ -48,7 +48,6 @@ fun SettingsScreen(
 ) {
 
     val user = viewModel.user.value
-    val notifEnabled by viewModel.isNotificationEnabled
 
     Scaffold(
         topBar = {
@@ -78,9 +77,11 @@ fun SettingsScreen(
         bottomBar = { 
             BottomNavigationBar(
                 currentRoute = "settings",
+                isProfileComplete = viewModel.isProfileComplete(),
                 onNavigateToHome = onNavigateToHome,
                 onNavigateToSell = onNavigateToSell,
-                onNavigateToSettings = {}
+                onNavigateToSettings = {},
+                onNavigateToCompleteProfile = onBackClick
             )
         }
     ) { innerPadding ->
@@ -97,27 +98,7 @@ fun SettingsScreen(
 
             // ✅ Menu Items
             SettingItem("Alamat", onClick = onNavigateToAddress)
-            SettingItem("Bahasa", onClick = onNavigateToLanguage)
             SettingItem("Ganti Password", onClick = onNavigateToChangePassword)
-
-            // ✅ Notification Toggle
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 6.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFF6F6F6))
-                    .padding(horizontal = 16.dp, vertical = 15.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Notifikasi")
-                Spacer(Modifier.weight(1f))
-                Switch(
-                    checked = notifEnabled,
-                    onCheckedChange = { viewModel.toggleNotification() }
-                )
-            }
-
             SettingItem("Pusat Bantuan", onClick = onNavigateToHelpCenter)
             SettingItem(
                 title = "Keluar",

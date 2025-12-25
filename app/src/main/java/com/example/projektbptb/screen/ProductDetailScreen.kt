@@ -8,31 +8,54 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.runtime.DisposableEffect
 import coil.compose.AsyncImage
 import com.example.projektbptb.R
 import com.example.projektbptb.data.model.Comment
 import com.example.projektbptb.data.model.ProductDetail
 import com.example.projektbptb.ui.theme.*
+import com.example.projektbptb.viewmodel.CommentViewModel
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.compass.CompassOverlay
+import org.osmdroid.views.overlay.compass.InternalCompassOrientationProvider
+import org.osmdroid.views.overlay.gestures.RotationGestureOverlay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,10 +72,17 @@ fun ProductDetailScreen(
     ),
     onBackClick: () -> Unit = {},
     onFavoriteClick: () -> Unit = {},
-    onWhatsAppClick: () -> Unit = {}
+    onNotificationClick: () -> Unit = {},
+    onWhatsAppClick: () -> Unit = {},
+    onSellerClick: (Int) -> Unit = {},
+    commentViewModel: CommentViewModel = viewModel(
+        factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(
+            LocalContext.current.applicationContext as android.app.Application
+        )
+    )
 ) {
-    var commentText by remember { mutableStateOf("") }
-    var comments by remember { mutableStateOf(product.comments) }
+    val productId = product.id.toIntOrNull() ?: 0
+    
     // State isFavorite harus ter-sync dengan product.isFavorite
     // Jangan update lokal sebelum API call selesai
     var isFavorite by remember(product.id) { mutableStateOf(product.isFavorite) }
@@ -62,10 +92,40 @@ fun ProductDetailScreen(
         isFavorite = product.isFavorite
     }
     
+    // Tentukan apakah produk milik user sendiri
+    // Backend sudah mengirim isOwnProduct dengan benar
+    val isOwnProduct = product.isOwnProduct
+    
+    // Load comments when product is loaded
+    LaunchedEffect(productId) {
+        if (productId > 0) {
+            commentViewModel.loadComments(productId)
+        }
+    }
+    
+    // Auto clear error after 5 seconds
+    LaunchedEffect(commentViewModel.errorMessage.value) {
+        commentViewModel.errorMessage.value?.let {
+            kotlinx.coroutines.delay(5000)
+            commentViewModel.errorMessage.value = null
+        }
+    }
+    
+    val comments = commentViewModel.comments
+    val isLoadingComments = commentViewModel.isLoading.value
+    val commentError = commentViewModel.errorMessage.value
+    
+    // Get current user ID for ownership check
+    val authRepository = com.example.projektbptb.data.network.AuthRepository(LocalContext.current)
+    val currentUserId = authRepository.getUserId()
+    
+    var commentText by remember { mutableStateOf("") }
     var showCommentInput by remember { mutableStateOf(false) }
     var commentTextFieldFocusRequester = remember { FocusRequester() }
-    var editingCommentId by remember { mutableStateOf<String?>(null) }
+    var editingCommentId by remember { mutableStateOf<Int?>(null) }
     var editingCommentText by remember { mutableStateOf("") }
+    var replyingToCommentId by remember { mutableStateOf<Int?>(null) }
+    var replyText by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -88,16 +148,29 @@ fun ProductDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        // Jangan update state lokal dulu, biarkan API yang menentukan
-                        // State akan ter-update setelah API call selesai melalui LaunchedEffect
-                        onFavoriteClick()
-                    }) {
+                    // Icon Notifikasi
+                    IconButton(onClick = onNotificationClick) {
                         Icon(
-                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "Favorite",
-                            tint = if (isFavorite) RedPrimary else GrayDark
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Notifikasi",
+                            tint = GrayDark,
+                            modifier = Modifier.size(24.dp)
                         )
+                    }
+                    // Icon Favorite - hanya tampil jika bukan produk milik user sendiri
+                    if (!isOwnProduct) {
+                        IconButton(onClick = {
+                            // Jangan update state lokal dulu, biarkan API yang menentukan
+                            // State akan ter-update setelah API call selesai melalui LaunchedEffect
+                            onFavoriteClick()
+                        }) {
+                            Icon(
+                                imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = "Favorite",
+                                tint = if (isFavorite) RedPrimary else GrayDark,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -113,18 +186,51 @@ fun ProductDetailScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
-            // Gambar Produk
-            if (!product.imageUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = product.imageUrl,
-                    contentDescription = product.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(300.dp),
-                    error = painterResource(id = R.drawable.logo),
-                    placeholder = painterResource(id = R.drawable.logo)
-                )
+            // Gambar Produk - Tampilkan semua gambar jika ada
+            val allImages = if (product.images.isNotEmpty()) {
+                product.images
+            } else if (!product.imageUrl.isNullOrBlank()) {
+                listOf(com.example.projektbptb.data.model.ProductImage(0, product.imageUrl))
+            } else {
+                emptyList()
+            }
+            
+            if (allImages.isNotEmpty()) {
+                // Horizontal scroll untuk multiple images
+                if (allImages.size > 1) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        allImages.forEach { image ->
+                            AsyncImage(
+                                model = image.url,
+                                contentDescription = "${product.name} - Image ${image.id}",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .width(300.dp)
+                                    .height(300.dp)
+                                    .clip(RoundedCornerShape(0.dp)),
+                                error = painterResource(id = R.drawable.logo),
+                                placeholder = painterResource(id = R.drawable.logo)
+                            )
+                        }
+                    }
+                } else {
+                    // Single image - full width
+                    AsyncImage(
+                        model = allImages[0].url,
+                        contentDescription = product.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(300.dp),
+                        error = painterResource(id = R.drawable.logo),
+                        placeholder = painterResource(id = R.drawable.logo)
+                    )
+                }
             } else if (product.imageRes != 0) {
                 Image(
                     painter = painterResource(id = product.imageRes),
@@ -222,74 +328,283 @@ fun ProductDetailScreen(
                 Divider(color = GrayLight, thickness = 1.dp)
 
                 // Lokasi
-                Column {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Text(
                         text = "Lokasi",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Black,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        modifier = Modifier.padding(bottom = 4.dp)
                     )
-                    Text(
-                        text = product.location,
-                        fontSize = 14.sp,
-                        color = GrayDark
-                    )
+                    
+                    // Detail Lokasi
+                    if (product.location.isNotEmpty()) {
+                        Text(
+                            text = product.location,
+                            fontSize = 14.sp,
+                            color = GrayDark,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                    
+                    // Map untuk menampilkan lokasi
+                    if (product.latitude != null && product.longitude != null) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(250.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            val context = LocalContext.current
+                            val lifecycleOwner = LocalLifecycleOwner.current
+                            var mapView by remember { mutableStateOf<MapView?>(null) }
+                            var currentMarker by remember { mutableStateOf<Marker?>(null) }
+                            
+                            // Initialize OSMDroid
+                            LaunchedEffect(Unit) {
+                                Configuration.getInstance().load(context, context.getSharedPreferences("osmdroid", android.content.Context.MODE_PRIVATE))
+                                Configuration.getInstance().userAgentValue = context.packageName
+                            }
+                            
+                            AndroidView(
+                                factory = { ctx ->
+                                    MapView(ctx).apply {
+                                        mapView = this@apply
+                                        
+                                        // Configure OSMDroid
+                                        setTileSource(TileSourceFactory.MAPNIK)
+                                        setMultiTouchControls(true)
+                                        minZoomLevel = 3.0
+                                        maxZoomLevel = 20.0
+                                        
+                                        // Set location from product
+                                        val productLocation = GeoPoint(product.latitude!!, product.longitude!!)
+                                        controller.setZoom(16.0)
+                                        controller.setCenter(productLocation)
+                                        
+                                        // Add compass overlay
+                                        val compassOverlay = CompassOverlay(ctx, InternalCompassOrientationProvider(ctx), this)
+                                        compassOverlay.enableCompass()
+                                        overlays.add(compassOverlay)
+                                        
+                                        // Add rotation gesture overlay
+                                        val rotationGestureOverlay = RotationGestureOverlay(this)
+                                        rotationGestureOverlay.isEnabled = true
+                                        overlays.add(rotationGestureOverlay)
+                                        
+                                        // Add marker for product location
+                                        val marker = Marker(this)
+                                        marker.position = productLocation
+                                        marker.title = product.name
+                                        marker.snippet = product.location
+                                        marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                        overlays.add(marker)
+                                        currentMarker = marker
+                                        
+                                        invalidate()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxSize(),
+                                update = { view ->
+                                    // Update map when coordinates change
+                                    if (product.latitude != null && product.longitude != null) {
+                                        val location = GeoPoint(product.latitude!!, product.longitude!!)
+                                        view.controller.animateTo(location)
+                                        view.controller.setZoom(16.0)
+                                        
+                                        // Update marker
+                                        currentMarker?.let { view.overlays.remove(it) }
+                                        val marker = Marker(view)
+                                        marker.position = location
+                                        marker.title = product.name
+                                        marker.snippet = product.location
+                                        marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                        view.overlays.add(marker)
+                                        currentMarker = marker
+                                        view.invalidate()
+                                    }
+                                }
+                            )
+                            
+                            // Handle lifecycle properly - CRITICAL for MapView to work
+                            DisposableEffect(lifecycleOwner) {
+                                val observer = LifecycleEventObserver { _, event ->
+                                    when (event) {
+                                        Lifecycle.Event.ON_RESUME -> {
+                                            mapView?.onResume()
+                                        }
+                                        Lifecycle.Event.ON_PAUSE -> {
+                                            mapView?.onPause()
+                                        }
+                                        else -> {}
+                                    }
+                                }
+                                lifecycleOwner.lifecycle.addObserver(observer)
+                                
+                                onDispose {
+                                    lifecycleOwner.lifecycle.removeObserver(observer)
+                                }
+                            }
+                        }
+                    } else if (product.location.isNotEmpty()) {
+                        // Jika tidak ada koordinat, tampilkan pesan
+                        Text(
+                            text = "Peta tidak tersedia untuk lokasi ini",
+                            fontSize = 12.sp,
+                            color = GrayDark,
+                            fontStyle = FontStyle.Italic
+                        )
+                    }
                 }
 
                 Divider(color = GrayLight, thickness = 1.dp)
 
                 // Seller Info
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                product.userId?.let { onSellerClick(it) }
+                            },
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.Start
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(50.dp)
-                                .clip(CircleShape)
-                                .background(BlueLight),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(
-                                text = product.sellerName.first().toString(),
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BluePrimary
-                            )
-                        }
-                        Column {
-                            Text(
-                                text = product.sellerName,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Black
-                            )
-                            Text(
-                                text = "Penjual",
-                                fontSize = 12.sp,
-                                color = GrayDark
-                            )
+                            if (!product.sellerProfileImage.isNullOrEmpty()) {
+                                AsyncImage(
+                                    model = product.sellerProfileImage,
+                                    contentDescription = "Seller Profile",
+                                    modifier = Modifier
+                                        .size(50.dp)
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(50.dp)
+                                        .clip(CircleShape)
+                                        .background(BlueLight),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = product.sellerName.firstOrNull()?.toString() ?: "P",
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BluePrimary
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = product.sellerName,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Black
+                                )
+                                Text(
+                                    text = if (!product.sellerUsername.isNullOrEmpty()) "@${product.sellerUsername}" else "Penjual",
+                                    fontSize = 12.sp,
+                                    color = GrayDark
+                                )
+                            }
                         }
                     }
-                    Button(
-                        onClick = onWhatsAppClick,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = GreenPrimary
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            "Hubungi",
-                            color = White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp
-                        )
+                    
+                    // Nomor WhatsApp - bisa diklik untuk langsung buka WhatsApp
+                    if (product.whatsappNumber.isNotEmpty()) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onWhatsAppClick() },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color(0xFF25D366) // WhatsApp green
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                            colors = listOf(
+                                                Color(0xFF25D366),
+                                                Color(0xFF128C7E)
+                                            )
+                                        )
+                                    )
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                // WhatsApp Icon Circle
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .background(
+                                            Color.White.copy(alpha = 0.2f),
+                                            CircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Phone,
+                                        contentDescription = "WhatsApp",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                
+                                // Nomor WhatsApp Info
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Text(
+                                        text = "Hubungi Penjual",
+                                        fontSize = 12.sp,
+                                        color = Color.White.copy(alpha = 0.9f),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = product.whatsappNumber,
+                                        fontSize = 15.sp,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                
+                                // Arrow Icon
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .background(
+                                            Color.White.copy(alpha = 0.2f),
+                                            CircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowForward,
+                                        contentDescription = "Open WhatsApp",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -320,6 +635,45 @@ fun ProductDetailScreen(
                         }
                     }
 
+                    // Error message
+                    commentError?.let { error ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color.Red.copy(alpha = 0.1f)
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = error,
+                                    fontSize = 12.sp,
+                                    color = Color.Red
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                IconButton(
+                                    onClick = { commentViewModel.errorMessage.value = null },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Close",
+                                        tint = Color.Red,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // Input Komentar (muncul hanya ketika showCommentInput = true)
                     if (showCommentInput) {
                         Row(
@@ -329,7 +683,13 @@ fun ProductDetailScreen(
                         ) {
                             OutlinedTextField(
                                 value = commentText,
-                                onValueChange = { commentText = it },
+                                onValueChange = { 
+                                    commentText = it
+                                    // Clear error when user starts typing
+                                    if (commentError != null) {
+                                        commentViewModel.errorMessage.value = null
+                                    }
+                                },
                                 placeholder = { Text("Tulis komentar...", color = GrayDark) },
                                 modifier = Modifier
                                     .weight(1f)
@@ -345,31 +705,35 @@ fun ProductDetailScreen(
                             )
                             IconButton(
                                 onClick = {
-                                    if (commentText.isNotBlank()) {
-                                        val newComment = Comment(
-                                            id = System.currentTimeMillis().toString(),
-                                            userName = "Anda",
-                                            commentText = commentText.trim(),
-                                            timestamp = "Baru saja"
-                                        )
-                                        // Tambahkan komentar baru ke list (langsung tampil)
-                                        comments = comments + newComment
-                                        // Kosongkan input
-                                        commentText = ""
-                                        // Sembunyikan input setelah komentar ditambahkan
-                                        showCommentInput = false
+                                    if (commentText.isNotBlank() && productId > 0) {
+                                        // Clear error before creating comment
+                                        commentViewModel.errorMessage.value = null
+                                        commentViewModel.createComment(productId, commentText.trim()) {
+                                            commentText = ""
+                                            showCommentInput = false
+                                            // Reload comments to ensure sync
+                                            commentViewModel.loadComments(productId)
+                                        }
                                     }
                                 },
+                                enabled = !isLoadingComments && commentText.isNotBlank() && productId > 0,
                                 modifier = Modifier
                                     .size(48.dp)
                                     .background(BluePrimary, CircleShape)
                             ) {
-                                Icon(
-                                    Icons.Default.Send,
-                                    contentDescription = "Send",
-                                    tint = White,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                if (isLoadingComments) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = White
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.Send,
+                                        contentDescription = "Send",
+                                        tint = White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
@@ -382,9 +746,20 @@ fun ProductDetailScreen(
                         }
                     }
 
-                    // Daftar Komentar - Tampilkan semua komentar yang sudah dibuat
-                    if (comments.isEmpty()) {
-                        // Jika belum ada komentar
+                    // Daftar Komentar
+                    if (isLoadingComments && comments.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(32.dp),
+                                color = BluePrimary
+                            )
+                        }
+                    } else if (comments.isEmpty()) {
                         Text(
                             text = "Belum ada komentar. Jadilah yang pertama berkomentar!",
                             fontSize = 14.sp,
@@ -392,7 +767,6 @@ fun ProductDetailScreen(
                             modifier = Modifier.padding(vertical = 16.dp)
                         )
                     } else {
-                        // Tampilkan semua komentar yang sudah dibuat (langsung tampil setelah ditambahkan)
                         Column(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.padding(top = if (showCommentInput) 0.dp else 8.dp)
@@ -400,32 +774,127 @@ fun ProductDetailScreen(
                             comments.forEach { comment ->
                                 CommentItem(
                                     comment = comment,
-                                    isEditing = editingCommentId == comment.id,
-                                    editingText = if (editingCommentId == comment.id) editingCommentText else "",
+                                    isEditing = editingCommentId == comment.id.toIntOrNull(),
+                                    editingText = if (editingCommentId == comment.id.toIntOrNull()) editingCommentText else "",
                                     onEditTextChange = { editingCommentText = it },
                                     onEditClick = {
-                                        editingCommentId = comment.id
+                                        editingCommentId = comment.id.toIntOrNull()
                                         editingCommentText = comment.commentText
                                     },
                                     onSaveEdit = {
-                                        comments = comments.map { c ->
-                                            if (c.id == comment.id) {
-                                                c.copy(commentText = editingCommentText.trim())
-                                            } else {
-                                                c
+                                        comment.id.toIntOrNull()?.let { commentId ->
+                                            commentViewModel.updateComment(commentId, editingCommentText.trim()) {
+                                                editingCommentId = null
+                                                editingCommentText = ""
                                             }
                                         }
-                                        editingCommentId = null
-                                        editingCommentText = ""
                                     },
                                     onCancelEdit = {
                                         editingCommentId = null
                                         editingCommentText = ""
                                     },
                                     onDeleteClick = {
-                                        comments = comments.filter { it.id != comment.id }
-                                    }
+                                        comment.id.toIntOrNull()?.let { commentId ->
+                                            commentViewModel.deleteComment(commentId) {}
+                                        }
+                                    },
+                                    onReplyClick = {
+                                        replyingToCommentId = comment.id.toIntOrNull()
+                                        replyText = ""
+                                    },
+                                    isReplying = replyingToCommentId == comment.id.toIntOrNull(),
+                                    replyText = if (replyingToCommentId == comment.id.toIntOrNull()) replyText else "",
+                                    onReplyTextChange = { replyText = it },
+                                    onSendReply = {
+                                        comment.id.toIntOrNull()?.let { commentId ->
+                                            if (replyText.isNotBlank()) {
+                                                commentViewModel.createComment(productId, replyText.trim(), parentCommentId = commentId) {
+                                                    replyText = ""
+                                                    replyingToCommentId = null
+                                                    commentViewModel.loadComments(productId)
+                                                }
+                                            }
+                                        }
+                                    },
+                                    onCancelReply = {
+                                        replyingToCommentId = null
+                                        replyText = ""
+                                    },
+                                    currentUserId = currentUserId,
+                                    productId = productId,
+                                    commentViewModel = commentViewModel
                                 )
+                                
+                                // Tampilkan Replies (nested comments) - di ProductDetailScreen
+                                if (comment.replies.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 48.dp), // Indentasi untuk replies
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        comment.replies.forEach { reply ->
+                                            CommentItem(
+                                                comment = reply,
+                                                isEditing = editingCommentId == reply.id.toIntOrNull(),
+                                                editingText = if (editingCommentId == reply.id.toIntOrNull()) editingCommentText else "",
+                                                onEditTextChange = { editingCommentText = it },
+                                                onEditClick = {
+                                                    editingCommentId = reply.id.toIntOrNull()
+                                                    editingCommentText = reply.commentText
+                                                },
+                                                onSaveEdit = {
+                                                    reply.id.toIntOrNull()?.let { replyId ->
+                                                        commentViewModel.updateComment(replyId, editingCommentText.trim()) {
+                                                            editingCommentId = null
+                                                            editingCommentText = ""
+                                                            // Reload comments untuk sync
+                                                            commentViewModel.loadComments(productId)
+                                                        }
+                                                    }
+                                                },
+                                                onCancelEdit = {
+                                                    editingCommentId = null
+                                                    editingCommentText = ""
+                                                },
+                                                onDeleteClick = {
+                                                    reply.id.toIntOrNull()?.let { replyId ->
+                                                        commentViewModel.deleteComment(replyId) {
+                                                            // Reload comments untuk sync
+                                                            commentViewModel.loadComments(productId)
+                                                        }
+                                                    }
+                                                },
+                                                onReplyClick = {
+                                                    replyingToCommentId = reply.id.toIntOrNull()
+                                                    replyText = ""
+                                                },
+                                                isReplying = replyingToCommentId == reply.id.toIntOrNull(),
+                                                replyText = if (replyingToCommentId == reply.id.toIntOrNull()) replyText else "",
+                                                onReplyTextChange = { replyText = it },
+                                                onSendReply = {
+                                                    reply.id.toIntOrNull()?.let { replyId ->
+                                                        if (replyText.isNotBlank()) {
+                                                            commentViewModel.createComment(productId, replyText.trim(), parentCommentId = replyId) {
+                                                                replyText = ""
+                                                                replyingToCommentId = null
+                                                                commentViewModel.loadComments(productId)
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                onCancelReply = {
+                                                    replyingToCommentId = null
+                                                    replyText = ""
+                                                },
+                                                currentUserId = currentUserId,
+                                                productId = productId,
+                                                commentViewModel = commentViewModel
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -446,9 +915,21 @@ fun CommentItem(
     onEditClick: () -> Unit = {},
     onSaveEdit: () -> Unit = {},
     onCancelEdit: () -> Unit = {},
-    onDeleteClick: () -> Unit = {}
+    onDeleteClick: () -> Unit = {},
+    onReplyClick: () -> Unit = {},
+    isReplying: Boolean = false,
+    replyText: String = "",
+    onReplyTextChange: (String) -> Unit = {},
+    onSendReply: () -> Unit = {},
+    onCancelReply: () -> Unit = {},
+    currentUserId: Int? = null,
+    productId: Int = 0,
+    commentViewModel: CommentViewModel? = null
 ) {
-    val isOwnComment = comment.userName == "Anda"
+    val replyTextFieldFocusRequester = remember { FocusRequester() }
+    // Check if current user owns this comment
+    // For now, we'll check by userId (will be improved with actual auth)
+    val isOwnComment = currentUserId != null && comment.userId == currentUserId
     
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -570,6 +1051,91 @@ fun CommentItem(
                         lineHeight = 20.sp
                     )
                 }
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Tombol Balas (selalu muncul, tidak peduli own comment atau tidak)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = onReplyClick,
+                        modifier = Modifier.padding(0.dp)
+                    ) {
+                        Text(
+                            text = "Balas",
+                            fontSize = 12.sp,
+                            color = BluePrimary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+                
+                // Input Reply (muncul saat isReplying = true)
+                if (isReplying) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = replyText,
+                            onValueChange = onReplyTextChange,
+                            placeholder = { Text("Balas ${comment.userName}...", color = GrayDark, fontSize = 12.sp) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusRequester(replyTextFieldFocusRequester),
+                            colors = TextFieldDefaults.colors(
+                                focusedIndicatorColor = BluePrimary,
+                                unfocusedIndicatorColor = GrayLight,
+                                focusedContainerColor = White,
+                                unfocusedContainerColor = White
+                            ),
+                            shape = RoundedCornerShape(20.dp),
+                            maxLines = 2,
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+                        )
+                        IconButton(
+                            onClick = onSendReply,
+                            enabled = replyText.isNotBlank(),
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(
+                                    if (replyText.isNotBlank()) BluePrimary else GrayLight,
+                                    CircleShape
+                                )
+                        ) {
+                            Icon(
+                                Icons.Default.Send,
+                                contentDescription = "Send Reply",
+                                tint = White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = onCancelReply,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Cancel",
+                                tint = GrayDark,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    
+                    // Auto focus ketika reply input muncul
+                    LaunchedEffect(isReplying) {
+                        if (isReplying) {
+                            replyTextFieldFocusRequester.requestFocus()
+                        }
+                    }
+                }
+                
+                // Tampilkan Replies (nested comments) - dipindahkan ke ProductDetailScreen
+                // Replies akan ditampilkan di ProductDetailScreen, bukan di sini
             }
         }
     }
